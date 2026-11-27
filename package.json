@@ -13,7 +13,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "geo:live": "node geo/server.mjs",
-    "geo:test": "node --test tests/geo-core.test.mjs tests/geo-queue.test.mjs tests/geo-knowledge.test.mjs tests/geo-agent.test.mjs tests/geo-report.test.mjs tests/geo-auth.test.mjs tests/geo-http.test.mjs tests/geo-ops.test.mjs tests/geo-workflows.test.mjs"
+    "geo:test": "node --test tests/geo-core.test.mjs tests/geo-queue.test.mjs tests/geo-knowledge.test.mjs tests/geo-agent.test.mjs tests/geo-report.test.mjs tests/geo-auth.test.mjs tests/geo-http.test.mjs tests/geo-ops.test.mjs tests/geo-workflows.test.mjs tests/geo-planner.test.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

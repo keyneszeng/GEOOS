@@ -15,6 +15,7 @@ export function snapshot(source,destination,{restore=false}={}){
   const staged=new DatabaseSync(temp);try{check(staged);if(restore){const has=t=>staged.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t);staged.exec("BEGIN IMMEDIATE");try{
    if(has("geo_sessions"))staged.exec("DELETE FROM geo_sessions");
    if(has("geo_schedules"))staged.exec("UPDATE geo_schedules SET enabled=0");
+   if(has("geo_plans"))staged.exec("UPDATE geo_plans SET enabled=0");
    if(has("geo_workflows"))staged.exec("UPDATE geo_workflows SET state='cancelled',pause_requested=0,error='Cancelled during restore' WHERE state IN ('queued','paused','running')");
    if(has("geo_jobs"))staged.exec("UPDATE geo_jobs SET state='cancelled',error='Cancelled during restore',finished_at=datetime('now') WHERE state='queued'");
    staged.exec("COMMIT")}catch(e){staged.exec("ROLLBACK");throw e}check(staged)}}finally{staged.close()}
