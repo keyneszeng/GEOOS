@@ -10,10 +10,13 @@ import {openActions} from "./actions.mjs";
 import {openAgent} from "./agent.mjs";
 import {openImporter} from "./import.mjs";
 import {openReviews} from "./reviews.mjs";
+import {openAuth,canWrite} from "./auth.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
 const store=openStore(path),html=readFileSync(new URL("./index.html",import.meta.url)),host="127.0.0.1:"+port,origin="http://"+host;
+const auth=openAuth(store,{bootstrapUser:process.env.GEO_ADMIN_USER,bootstrapPassword:process.env.GEO_ADMIN_PASSWORD});
+delete process.env.GEO_ADMIN_PASSWORD;
 const queue=openQueue(store);
 const knowledge=openKnowledge(store),actions=openActions(store,knowledge);
 const agent=openAgent(store,knowledge,actions,{limit:Number(process.env.GEO_AGENT_DAILY_LIMIT||5)});
@@ -36,11 +39,25 @@ createServer(async(req,res)=>{
  try{
  const url=new URL(req.url,origin);
  if(req.method==="GET"&&url.pathname==="/"){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'","X-Content-Type-Options":"nosniff"});return res.end(html)}
- if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{workspaces:store.list(),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit});
- if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,store.createWorkspace(await body(req)));
- const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison)$/);
+ if(req.method==="POST"&&req.headers.origin!==origin)return respond(res,403,{error:"Same-origin write required"});
+ if(req.method==="POST"&&url.pathname==="/api/login"){const token=auth.login(await body(req));if(!token)return respond(res,401,{error:"Invalid credentials"});res.setHeader("Set-Cookie","geo_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800");return respond(res,200,{ok:true})}
+ const user=auth.authenticate(req);
+ if(!user)return respond(res,401,{error:"Login required"});
+ if(req.method==="POST"&&url.pathname==="/api/logout"){auth.logout(req);res.setHeader("Set-Cookie","geo_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0");return respond(res,200,{ok:true})}
+ if(req.method==="POST"&&url.pathname==="/api/users"){if(!user.platform_admin)return respond(res,403,{error:"Platform admin required"});return respond(res,201,auth.provision(user,await body(req)))}
+ if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{user,workspaces:auth.list(user.id),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit});
+ if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,auth.createWorkspace(user.id,await body(req)));
+ const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit)$/);
  if(!match)return respond(res,404,{error:"Not found"});
- const [,id,resource]=match;if(!store.workspace(id))return respond(res,404,{error:"Workspace not found"});
+ const [,id,resource]=match;const role=auth.role(id,user.id);if(!role)return respond(res,404,{error:"Workspace not found"});
+ if(["members","audit"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
+ // Recheck authorization after asynchronous body parsing. No request body is written to the audit log.
+ const data=req.method==="POST"?await body(req):null;
+ if(data&&!canWrite(auth.role(id,user.id),resource,data.action,data.state))return respond(res,403,{error:"Role does not permit this action"});
+ const write=(status,result)=>{auth.audit(id,user.id,resource,data?.action||"create",result?.id||data?.id||data?.targetId||data?.runId);return respond(res,status,result)};
+ if(req.method==="POST"&&resource==="members")return respond(res,200,data.action==="remove"?auth.removeMember(id,user.id,data):auth.setMember(id,user.id,data));
+ if(req.method==="GET"&&resource==="members")return respond(res,200,auth.members(id));
+ if(req.method==="GET"&&resource==="audit")return respond(res,200,auth.logs(id));
  if(req.method==="GET"){
   if(resource==="imports")return respond(res,200,importer.recent(id));
   if(resource==="reviews")return respond(res,200,reviews.recent(id));
@@ -56,20 +73,20 @@ createServer(async(req,res)=>{
   if(resource==="analysis")return respond(res,200,analyze(store.db.prepare("SELECT id,prompt_id,question,provider,model,status,mentioned,competitor_hits,citations FROM samples WHERE workspace_id=? AND created_at>=? ORDER BY created_at DESC").all(id,new Date(Date.now()-30*86400000).toISOString())));
   return respond(res,200,resource==="prompts"?store.prompts(id):resource==="samples"?store.history(id):store.stats(id));
  }
- if(req.method==="POST"&&resource==="imports")return respond(res,200,await importer.run(id,await body(req)));
- if(req.method==="POST"&&resource==="reviews")return respond(res,200,reviews.review(id,await body(req)));
- if(req.method==="POST"&&resource==="agent"){const d=await body(req);if(d.action==="run")return respond(res,200,await agent.run(id,d));if(d.action==="adopt")return respond(res,200,agent.adopt(id,d));throw Error("Unsupported agent action")}
- if(req.method==="POST"&&resource==="evidence")return respond(res,201,knowledge.addEvidence(id,await body(req)));
- if(req.method==="POST"&&resource==="facts"){const d=await body(req);return respond(res,200,d.action==="review"?knowledge.review(id,d):knowledge.propose(id,d))}
- if(req.method==="POST"&&resource==="actions"){const d=await body(req);if(d.action==="discover")return respond(res,200,actions.discover(id));if(d.action==="draft")return respond(res,200,actions.draft(id,d));if(d.action==="transition")return respond(res,200,actions.transition(id,d));throw Error("Unsupported action")}
- if(req.method==="POST"&&resource==="prompts")return respond(res,201,store.addPrompt(id,await body(req)));
+ if(req.method==="POST"&&resource==="imports")return write(200,await importer.run(id,data));
+ if(req.method==="POST"&&resource==="reviews")return write(200,reviews.review(id,data));
+ if(req.method==="POST"&&resource==="agent"){const d=data;if(d.action==="run")return write(200,await agent.run(id,d));if(d.action==="adopt")return write(200,agent.adopt(id,d));throw Error("Unsupported agent action")}
+ if(req.method==="POST"&&resource==="evidence")return write(201,knowledge.addEvidence(id,data));
+ if(req.method==="POST"&&resource==="facts"){const d=data;return write(200,d.action==="review"?knowledge.review(id,d):knowledge.propose(id,d))}
+ if(req.method==="POST"&&resource==="actions"){const d=data;if(d.action==="discover")return write(200,actions.discover(id));if(d.action==="draft")return write(200,actions.draft(id,d));if(d.action==="transition")return write(200,actions.transition(id,d));throw Error("Unsupported action")}
+ if(req.method==="POST"&&resource==="prompts")return write(201,store.addPrompt(id,data));
  if(req.method==="POST"&&(resource==="samples"||resource==="jobs")){
-  const d=await body(req);if(d.action==="cancel")return respond(res,200,queue.cancel(id,d.id));
-  if(d.action==="retry"){const j=queue.retry(id,d.id);respond(res,202,j);wake();return}
+  const d=data;if(d.action==="cancel")return write(200,queue.cancel(id,d.id));
+  if(d.action==="retry"){const j=queue.retry(id,d.id);write(202,j);wake();return}
   if(!configuredProviders().includes(d.provider))throw Error("Provider not configured");
-  const j=queue.enqueue(id,d.promptId,d.provider);respond(res,202,j);wake();return
+  const j=queue.enqueue(id,d.promptId,d.provider);write(202,j);wake();return
  }
- if(req.method==="POST"&&resource==="schedules"){const d=await body(req);if(d.action==="stop")return respond(res,200,queue.stop(id,d.id));if(!configuredProviders().includes(d.provider))throw Error("Provider not configured");return respond(res,201,queue.schedule(id,d))}
+ if(req.method==="POST"&&resource==="schedules"){const d=data;if(d.action==="stop")return write(200,queue.stop(id,d.id));if(!configuredProviders().includes(d.provider))throw Error("Provider not configured");return write(201,queue.schedule(id,d))}
  return respond(res,405,{error:"Method not allowed"});
  }catch(e){const msg=e instanceof SyntaxError?"Invalid JSON":String(e.message);return respond(res,400,{error:/SQLITE|database|constraint/i.test(msg)?"Database operation failed":msg.slice(0,200)})}
 }).listen(port,"127.0.0.1",()=>console.log("GEO/OS live monitor: "+origin));
