@@ -24,6 +24,7 @@ jobs:
       - run: node --check geo/backup.mjs
       - run: node --check geo/workflows.mjs
       - run: node --check geo/planner.mjs
+      - run: node --check geo/distribution.mjs
       - name: Build and smoke-test local container
         run: |
           docker build -f Dockerfile.geo -t geo-test .
