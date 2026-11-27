@@ -1,98 +1,90 @@
-# vinext-starter
+# GEO/OS — 企业 GEO 优化工作台
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+GEO/OS 是一个面向企业市场、品牌、公关、内容、产品和数据团队的生成式引擎优化（GEO）工作台。它围绕“监测 → 诊断 → 行动 → 复盘”建立闭环，帮助企业观察品牌在 ChatGPT、DeepSeek、豆包、元宝、Gemini、Perplexity 等 AI 引擎中的可见度，并把内容缺口、事实冲突和信源问题转化为可执行任务。
 
-## Prerequisites
+在线演示：[geo-os-workbench.swift-lake-5238.chatgpt.site](https://geo-os-workbench.swift-lake-5238.chatgpt.site)
 
-- Node.js `>=22.13.0`
+> 当前版本为可交互的产品原型，界面数据均为安全的示例数据，尚未连接真实企业数据或第三方 API。
 
-## Quick Start
+## 核心能力
+
+- **GEO 指挥舱**：综合健康度、AI 声量份额、推荐率、引用率与趋势总览
+- **AI 监测**：提示词管理、多引擎筛选、批量采样状态和幽灵引用观察
+- **机会洞察**：将内容缺口、信源缺口、事实冲突和技术问题转成行动建议
+- **内容作战**：机会入池、事实核验、专家增益、合规审批、分发与引用复盘
+- **知识底座**：维护企业唯一事实源、证据覆盖率、新鲜度和公开/内部资产分级
+- **风险纠偏**：处理 RAG 污染、旧负面、价格幻觉和品牌实体定义冲突
+- **ROI 归因**：统一观察 AI 引荐访问、零点击线索、品牌搜索增量和 CRM 商机
+
+## 产品方法
+
+工作台遵循以下企业 GEO 原则：
+
+1. 用不含品牌词的真实决策问题监测“出现概率”，避免把单次回答当作稳定排名。
+2. 内容生产必须由企业事实与原始证据驱动，AI 负责搭骨架，业务专家负责信息增益。
+3. 官网、行业媒体、社区问答、评测和百科共同构成 AI 的信源共识。
+4. 监测的目的不是生成报表，而是找到下一步可执行的内容、技术、PR 或事实修复动作。
+5. GEO 价值不能只按点击归因，需同时观察表单自报、品牌搜索与 CRM 线索。
+6. 自动化可以采集、分析和写草稿，但外部发布与事实声明必须经过人工审批。
+
+## 技术栈
+
+- React 19
+- Next.js 16 App Router
+- vinext + Vite
+- TypeScript
+- Tailwind CSS 4（基础构建）与产品级自定义 CSS
+- Cloudflare Workers 兼容构建
+
+## 本地运行
+
+需要 Node.js `>=22.13.0`。
 
 ```bash
 npm install
 npm run dev
+```
+
+默认访问 `http://localhost:3000`。
+
+部分旧版 macOS 无法运行 Cloudflare `workerd`。此时可使用纯 UI 预览模式：
+
+```bash
+SITES_LOCAL_UI_PREVIEW=1 npm run dev
+```
+
+## 验证
+
+```bash
 npm run build
+node --test tests/rendered-html.test.mjs
 ```
 
-This starter does not use `wrangler.jsonc`.
+## 项目结构
 
-## Included Shape
-
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```text
+app/
+  page.tsx          # 工作台数据、视图和交互
+  globals.css       # 完整视觉系统与响应式布局
+  layout.tsx        # 站点元数据和社交分享配置
+public/
+  og.png            # GEO/OS 社交分享封面
+tests/
+  rendered-html.test.mjs
+.openai/
+  hosting.json      # Sites 托管声明
+worker/
+  index.ts          # Cloudflare Worker 入口
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+## 后续接入建议
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+- 通过模型 API 或浏览器采样服务接入真实 AI 回答与引用 URL
+- 接入企业 CMS、知识库、GA4、Search Console 与 CRM
+- 使用 D1/PostgreSQL 保存提示词、回答快照、内容任务和审计记录
+- 增加企业成员、角色权限、审批流和多品牌工作区
+- 对接飞书、Slack 或企业微信，实现风险告警与周报推送
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## 数据与安全
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+仓库不包含真实客户资料、API 密钥或本地 Obsidian 原始笔记。生产环境接入企业数据时，应将公开可引用资产与内部机密知识分层管理，并通过服务端权限控制保护写操作。
