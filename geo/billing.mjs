@@ -11,6 +11,6 @@ export function openBilling(store,{clock=Date.now}={}){
  else if(input.action==="invoice"){const s=subscription(w);if(!s||input.period!==month())throw Error("Current month and assigned plan required");db.prepare("INSERT INTO geo_invoices VALUES(?,?,?,?,?,?,'unpaid',NULL,?,NULL)").run(randomUUID(),w,input.period,s.name,s.price_minor,s.currency,now())}
  else if(input.action==="settle"){if(input.confirm!==true||typeof input.reference!=="string"||!input.reference.trim()||input.reference.length>200)throw Error("Confirm verified external payment reference");if(!db.prepare("UPDATE geo_invoices SET state='settled',reference=?,settled_at=? WHERE workspace_id=? AND id=? AND state='unpaid'").run(input.reference.trim(),now(),w,input.id).changes)throw Error("Unpaid invoice required")}
  else throw Error("Unsupported billing operation");return read(w)}
- function check(w,kind){const s=subscription(w);if(!s)return;const u=usage(w),limit=kind==="samples"?s.sample_limit:s.agent_limit;if(u[kind]>=limit)throw Error("Workspace monthly "+kind+" quota reached")}
+ function check(w,kind){const s=subscription(w);if(!s)return;const u=usage(w),limit=kind==="samples"?s.sample_limit:s.agent_limit;if(u[kind]>=limit){const e=Error("Workspace monthly "+kind+" quota reached");e.code="GEO_MONTHLY_QUOTA";throw e}}
  return {read,change,check};
 }
