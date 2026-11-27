@@ -198,3 +198,9 @@ Docker 内置 Python 3 与 poppler-utils。PDF 前 20 页文本（无 OCR）、D
 ### 业务工作台导航重构
 
 工作区选择常驻顶部；首次新建企业后进入指挥舱。主导航按知识底座 → AI 监测 → 回答复核 → 机会洞察 → 官网诊断（与内容优化并行）→ 优化行动 → 内容分发 → 效果复盘排序。每日策略和自动工作流归入可选自动化运营；成员权限与账单归入企业后台。事实提取、回答分析、提纲生成分别在对应页面使用独立于采样的 Agent 模型选择；不改变服务器审批和状态约束。首页展示现有数据的待办入口（近期列表计数不是全量业务总量），无工作区禁止进入业务页面，切换工作区清除未提交表单及旧企业视图。浏览器测试覆盖顺序和 Agent 分区。
+
+## 开源许可与贡献
+
+GEO/OS 自有软件代码和文档采用 [MIT License](LICENSE)。第三方依赖、商标、摄影等资源不因此改变许可；ESO 银河全景照片按原 [CC BY 4.0 及署名要求](geo/assets/README.md) 使用。参考项目的来源记录见 [内容分发整合说明](docs/distribution-integration.md)。
+
+贡献前执行 `npm run format`、`npm run format:check`、`npm run geo:test`。格式化使用固定 Prettier 3.6.2，通过 npx 获取，无运行时依赖；覆盖 JavaScript、TypeScript、CSS、HTML 及项目配置，排除二进制、生成文件、第三方资源与 lockfile。Python 解析脚本暂不纳入 Prettier。详细流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。

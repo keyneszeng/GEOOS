@@ -1,0 +1,13 @@
+# Generated, external and binary resources
+node_modules/
+.next/
+.vinext/
+.wrangler/
+dist/
+out/
+coverage/
+.geo-data/
+package-lock.json
+public/
+geo/assets/
+*.sqlite*

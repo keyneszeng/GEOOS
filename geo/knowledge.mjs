@@ -1,25 +1,145 @@
-import {randomUUID,createHash} from "node:crypto";
-import {validUrls} from "./core.mjs";
-const now=()=>new Date().toISOString();
-const hash=s=>createHash("sha256").update(s).digest("hex");
-function clean(v,max){if(typeof v!=="string"||!v.trim()||v.length>max)throw Error("Invalid text input");return v.trim()}
-function optional(v,max){return v===undefined||v===""?"":clean(v,max)}
-function choice(v,values){if(!values.includes(v))throw Error("Invalid choice");return v}
-export function openKnowledge(store){
- const {db}=store;
- db.exec("CREATE TABLE IF NOT EXISTS geo_evidence(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),title TEXT NOT NULL,url TEXT NOT NULL,excerpt TEXT NOT NULL,visibility TEXT NOT NULL CHECK(visibility IN ('public','internal')),sha256 TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(workspace_id,sha256));");
- db.exec("CREATE TABLE IF NOT EXISTS geo_facts(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),subject TEXT NOT NULL,predicate TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(workspace_id,subject,predicate));");
- db.exec("CREATE TABLE IF NOT EXISTS geo_fact_versions(id TEXT PRIMARY KEY,fact_id TEXT NOT NULL REFERENCES geo_facts(id),version INTEGER NOT NULL,value TEXT NOT NULL,evidence_id TEXT NOT NULL REFERENCES geo_evidence(id),status TEXT NOT NULL CHECK(status IN ('draft','approved','superseded','rejected')),created_at TEXT NOT NULL,reviewed_at TEXT,review_note TEXT,UNIQUE(fact_id,version)); CREATE UNIQUE INDEX IF NOT EXISTS geo_one_approved_fact ON geo_fact_versions(fact_id) WHERE status='approved';");
- function tx(fn){db.exec("BEGIN IMMEDIATE");try{const result=fn();db.exec("COMMIT");return result}catch(e){db.exec("ROLLBACK");throw e}}
- function workspace(w){if(!store.workspace(w))throw Error("Workspace not found")}
- const evidence=(w,id)=>db.prepare("SELECT * FROM geo_evidence WHERE workspace_id=? AND id=?").get(w,id);
- function addEvidence(w,input){workspace(w);const title=clean(input.title,200),excerpt=clean(input.excerpt,6000),visibility=choice(input.visibility,["public","internal"]);const url=optional(input.url,2000);if(url&&!validUrls([url]).length)throw Error("Invalid HTTP(S) source URL");if(visibility==="public"&&!url)throw Error("Public evidence requires a source URL");const normalized=url?validUrls([url])[0]:"";const digest=hash(JSON.stringify([normalized,excerpt,visibility]));const existing=db.prepare("SELECT * FROM geo_evidence WHERE workspace_id=? AND sha256=?").get(w,digest);if(existing)return existing;const id=randomUUID();db.prepare("INSERT INTO geo_evidence VALUES(?,?,?,?,?,?,?,?)").run(id,w,title,normalized,excerpt,visibility,digest,now());return evidence(w,id)}
- function version(w,id){return db.prepare("SELECT v.*,f.workspace_id,f.subject,f.predicate,e.visibility,e.title AS evidence_title,e.url AS evidence_url FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? AND v.id=?").get(w,id)}
- function propose(w,input,onCreated=()=>{}){workspace(w);const subject=clean(input.subject,150),predicate=clean(input.predicate,150),value=clean(input.value,2000);if(!evidence(w,input.evidenceId))throw Error("Evidence not found in workspace");return tx(()=>{let f=db.prepare("SELECT * FROM geo_facts WHERE workspace_id=? AND subject=? AND predicate=?").get(w,subject,predicate);if(!f){const id=randomUUID();db.prepare("INSERT INTO geo_facts VALUES(?,?,?,?,?)").run(id,w,subject,predicate,now());f={id}}const n=db.prepare("SELECT COALESCE(MAX(version),0)+1 AS n FROM geo_fact_versions WHERE fact_id=?").get(f.id).n;const id=randomUUID();db.prepare("INSERT INTO geo_fact_versions(id,fact_id,version,value,evidence_id,status,created_at) VALUES(?,?,?,?,?,'draft',?)").run(id,f.id,n,value,input.evidenceId,now());onCreated(id);return version(w,id)})}
- function review(w,input){const decision=choice(input.decision,["approved","rejected"]);const note=clean(input.note,1000);return tx(()=>{const v=version(w,input.id);if(!v||v.status!=="draft")throw Error("Only a draft in this workspace can be reviewed");if(decision==="approved"){const active=db.prepare("SELECT version FROM geo_fact_versions WHERE fact_id=? AND status='approved'").get(v.fact_id);if(active&&active.version>v.version)throw Error("Cannot approve a version older than current approved version");db.prepare("UPDATE geo_fact_versions SET status='superseded' WHERE fact_id=? AND status='approved'").run(v.fact_id)}db.prepare("UPDATE geo_fact_versions SET status=?,reviewed_at=?,review_note=? WHERE id=?").run(decision,now(),note,v.id);return version(w,v.id)})}
- const listEvidence=w=>db.prepare("SELECT * FROM geo_evidence WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 200").all(w);
- const listFacts=w=>db.prepare("SELECT v.*,f.subject,f.predicate,e.visibility,e.title AS evidence_title,e.url AS evidence_url FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? ORDER BY v.created_at DESC,v.rowid DESC LIMIT 200").all(w);
- // Only approved public facts may be included in a publishable draft or exported.
- const publicFacts=w=>db.prepare("SELECT v.id,v.value,v.version,f.subject,f.predicate,e.title AS evidence_title,e.url AS evidence_url,e.excerpt FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? AND e.workspace_id=? AND v.status='approved' AND e.visibility='public' ORDER BY f.subject,f.predicate").all(w,w);
- return {addEvidence,propose,review,listEvidence,listFacts,publicFacts,version};
+import { randomUUID, createHash } from "node:crypto";
+import { validUrls } from "./core.mjs";
+const now = () => new Date().toISOString();
+const hash = (s) => createHash("sha256").update(s).digest("hex");
+function clean(v, max) {
+  if (typeof v !== "string" || !v.trim() || v.length > max) throw Error("Invalid text input");
+  return v.trim();
+}
+function optional(v, max) {
+  return v === undefined || v === "" ? "" : clean(v, max);
+}
+function choice(v, values) {
+  if (!values.includes(v)) throw Error("Invalid choice");
+  return v;
+}
+export function openKnowledge(store) {
+  const { db } = store;
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS geo_evidence(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),title TEXT NOT NULL,url TEXT NOT NULL,excerpt TEXT NOT NULL,visibility TEXT NOT NULL CHECK(visibility IN ('public','internal')),sha256 TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(workspace_id,sha256));",
+  );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS geo_facts(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),subject TEXT NOT NULL,predicate TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(workspace_id,subject,predicate));",
+  );
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS geo_fact_versions(id TEXT PRIMARY KEY,fact_id TEXT NOT NULL REFERENCES geo_facts(id),version INTEGER NOT NULL,value TEXT NOT NULL,evidence_id TEXT NOT NULL REFERENCES geo_evidence(id),status TEXT NOT NULL CHECK(status IN ('draft','approved','superseded','rejected')),created_at TEXT NOT NULL,reviewed_at TEXT,review_note TEXT,UNIQUE(fact_id,version)); CREATE UNIQUE INDEX IF NOT EXISTS geo_one_approved_fact ON geo_fact_versions(fact_id) WHERE status='approved';",
+  );
+  function tx(fn) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = fn();
+      db.exec("COMMIT");
+      return result;
+    } catch (e) {
+      db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+  function workspace(w) {
+    if (!store.workspace(w)) throw Error("Workspace not found");
+  }
+  const evidence = (w, id) =>
+    db.prepare("SELECT * FROM geo_evidence WHERE workspace_id=? AND id=?").get(w, id);
+  function addEvidence(w, input) {
+    workspace(w);
+    const title = clean(input.title, 200),
+      excerpt = clean(input.excerpt, 6000),
+      visibility = choice(input.visibility, ["public", "internal"]);
+    const url = optional(input.url, 2000);
+    if (url && !validUrls([url]).length) throw Error("Invalid HTTP(S) source URL");
+    if (visibility === "public" && !url) throw Error("Public evidence requires a source URL");
+    const normalized = url ? validUrls([url])[0] : "";
+    const digest = hash(JSON.stringify([normalized, excerpt, visibility]));
+    const existing = db
+      .prepare("SELECT * FROM geo_evidence WHERE workspace_id=? AND sha256=?")
+      .get(w, digest);
+    if (existing) return existing;
+    const id = randomUUID();
+    db.prepare("INSERT INTO geo_evidence VALUES(?,?,?,?,?,?,?,?)").run(
+      id,
+      w,
+      title,
+      normalized,
+      excerpt,
+      visibility,
+      digest,
+      now(),
+    );
+    return evidence(w, id);
+  }
+  function version(w, id) {
+    return db
+      .prepare(
+        "SELECT v.*,f.workspace_id,f.subject,f.predicate,e.visibility,e.title AS evidence_title,e.url AS evidence_url FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? AND v.id=?",
+      )
+      .get(w, id);
+  }
+  function propose(w, input, onCreated = () => {}) {
+    workspace(w);
+    const subject = clean(input.subject, 150),
+      predicate = clean(input.predicate, 150),
+      value = clean(input.value, 2000);
+    if (!evidence(w, input.evidenceId)) throw Error("Evidence not found in workspace");
+    return tx(() => {
+      let f = db
+        .prepare("SELECT * FROM geo_facts WHERE workspace_id=? AND subject=? AND predicate=?")
+        .get(w, subject, predicate);
+      if (!f) {
+        const id = randomUUID();
+        db.prepare("INSERT INTO geo_facts VALUES(?,?,?,?,?)").run(id, w, subject, predicate, now());
+        f = { id };
+      }
+      const n = db
+        .prepare("SELECT COALESCE(MAX(version),0)+1 AS n FROM geo_fact_versions WHERE fact_id=?")
+        .get(f.id).n;
+      const id = randomUUID();
+      db.prepare(
+        "INSERT INTO geo_fact_versions(id,fact_id,version,value,evidence_id,status,created_at) VALUES(?,?,?,?,?,'draft',?)",
+      ).run(id, f.id, n, value, input.evidenceId, now());
+      onCreated(id);
+      return version(w, id);
+    });
+  }
+  function review(w, input) {
+    const decision = choice(input.decision, ["approved", "rejected"]);
+    const note = clean(input.note, 1000);
+    return tx(() => {
+      const v = version(w, input.id);
+      if (!v || v.status !== "draft") throw Error("Only a draft in this workspace can be reviewed");
+      if (decision === "approved") {
+        const active = db
+          .prepare("SELECT version FROM geo_fact_versions WHERE fact_id=? AND status='approved'")
+          .get(v.fact_id);
+        if (active && active.version > v.version)
+          throw Error("Cannot approve a version older than current approved version");
+        db.prepare(
+          "UPDATE geo_fact_versions SET status='superseded' WHERE fact_id=? AND status='approved'",
+        ).run(v.fact_id);
+      }
+      db.prepare(
+        "UPDATE geo_fact_versions SET status=?,reviewed_at=?,review_note=? WHERE id=?",
+      ).run(decision, now(), note, v.id);
+      return version(w, v.id);
+    });
+  }
+  const listEvidence = (w) =>
+    db
+      .prepare(
+        "SELECT * FROM geo_evidence WHERE workspace_id=? ORDER BY created_at DESC,rowid DESC LIMIT 200",
+      )
+      .all(w);
+  const listFacts = (w) =>
+    db
+      .prepare(
+        "SELECT v.*,f.subject,f.predicate,e.visibility,e.title AS evidence_title,e.url AS evidence_url FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? ORDER BY v.created_at DESC,v.rowid DESC LIMIT 200",
+      )
+      .all(w);
+  // Only approved public facts may be included in a publishable draft or exported.
+  const publicFacts = (w) =>
+    db
+      .prepare(
+        "SELECT v.id,v.value,v.version,f.subject,f.predicate,e.title AS evidence_title,e.url AS evidence_url,e.excerpt FROM geo_fact_versions v JOIN geo_facts f ON f.id=v.fact_id JOIN geo_evidence e ON e.id=v.evidence_id WHERE f.workspace_id=? AND e.workspace_id=? AND v.status='approved' AND e.visibility='public' ORDER BY f.subject,f.predicate",
+      )
+      .all(w, w);
+  return { addEvidence, propose, review, listEvidence, listFacts, publicFacts, version };
 }

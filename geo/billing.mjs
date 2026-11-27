@@ -1,16 +1,107 @@
-import {randomUUID} from "node:crypto";
-const now=()=>new Date().toISOString();
-function num(v,max){if(!Number.isSafeInteger(v)||v<0||v>max)throw Error("Invalid integer");return v}
-export function openBilling(store,{clock=Date.now}={}){
- const {db}=store;db.exec("CREATE TABLE IF NOT EXISTS geo_subscriptions(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id),name TEXT NOT NULL,price_minor INTEGER NOT NULL,currency TEXT NOT NULL,sample_limit INTEGER NOT NULL,agent_limit INTEGER NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS geo_invoices(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),period TEXT NOT NULL,plan_name TEXT NOT NULL,amount_minor INTEGER NOT NULL,currency TEXT NOT NULL,state TEXT NOT NULL,reference TEXT,created_at TEXT NOT NULL,settled_at TEXT,UNIQUE(workspace_id,period));");
- const month=()=>new Date(clock()).toISOString().slice(0,7),subscription=w=>db.prepare("SELECT * FROM geo_subscriptions WHERE workspace_id=?").get(w)||null;
- function usage(w){const period=month(),from=period+"-01T00:00:00.000Z",d=new Date(from);d.setUTCMonth(d.getUTCMonth()+1);const to=d.toISOString();return {period,samples:db.prepare("SELECT count(*) n FROM samples WHERE workspace_id=? AND created_at>=? AND created_at<?").get(w,from,to).n,agent:db.prepare("SELECT count(*) n FROM geo_agent_runs WHERE workspace_id=? AND created_at>=? AND created_at<?").get(w,from,to).n}}
- const read=w=>({subscription:subscription(w),usage:usage(w),invoices:db.prepare("SELECT * FROM geo_invoices WHERE workspace_id=? ORDER BY period DESC LIMIT 24").all(w)});
- function change(actor,w,input){if(!actor.platform_admin||!store.workspace(w))throw Error("Platform administrator required");
- if(input.action==="set"){if(typeof input.name!=="string"||!input.name.trim()||input.name.length>80||!/^[A-Z]{3}$/.test(input.currency||""))throw Error("Invalid plan");db.prepare("INSERT INTO geo_subscriptions VALUES(?,?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET name=excluded.name,price_minor=excluded.price_minor,currency=excluded.currency,sample_limit=excluded.sample_limit,agent_limit=excluded.agent_limit,updated_at=excluded.updated_at").run(w,input.name.trim(),num(input.priceMinor,1e12),input.currency,num(input.sampleLimit,1e6),num(input.agentLimit,1e6),now())}
- else if(input.action==="invoice"){const s=subscription(w);if(!s||input.period!==month())throw Error("Current month and assigned plan required");db.prepare("INSERT INTO geo_invoices VALUES(?,?,?,?,?,?,'unpaid',NULL,?,NULL)").run(randomUUID(),w,input.period,s.name,s.price_minor,s.currency,now())}
- else if(input.action==="settle"){if(input.confirm!==true||typeof input.reference!=="string"||!input.reference.trim()||input.reference.length>200)throw Error("Confirm verified external payment reference");if(!db.prepare("UPDATE geo_invoices SET state='settled',reference=?,settled_at=? WHERE workspace_id=? AND id=? AND state='unpaid'").run(input.reference.trim(),now(),w,input.id).changes)throw Error("Unpaid invoice required")}
- else throw Error("Unsupported billing operation");return read(w)}
- function check(w,kind){const s=subscription(w);if(!s)return;const u=usage(w),limit=kind==="samples"?s.sample_limit:s.agent_limit;if(u[kind]>=limit){const e=Error("Workspace monthly "+kind+" quota reached");e.code="GEO_MONTHLY_QUOTA";throw e}}
- return {read,change,check};
+import { randomUUID } from "node:crypto";
+const now = () => new Date().toISOString();
+function num(v, max) {
+  if (!Number.isSafeInteger(v) || v < 0 || v > max) throw Error("Invalid integer");
+  return v;
+}
+export function openBilling(store, { clock = Date.now } = {}) {
+  const { db } = store;
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS geo_subscriptions(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id),name TEXT NOT NULL,price_minor INTEGER NOT NULL,currency TEXT NOT NULL,sample_limit INTEGER NOT NULL,agent_limit INTEGER NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS geo_invoices(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),period TEXT NOT NULL,plan_name TEXT NOT NULL,amount_minor INTEGER NOT NULL,currency TEXT NOT NULL,state TEXT NOT NULL,reference TEXT,created_at TEXT NOT NULL,settled_at TEXT,UNIQUE(workspace_id,period));",
+  );
+  const month = () => new Date(clock()).toISOString().slice(0, 7),
+    subscription = (w) =>
+      db.prepare("SELECT * FROM geo_subscriptions WHERE workspace_id=?").get(w) || null;
+  function usage(w) {
+    const period = month(),
+      from = period + "-01T00:00:00.000Z",
+      d = new Date(from);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    const to = d.toISOString();
+    return {
+      period,
+      samples: db
+        .prepare(
+          "SELECT count(*) n FROM samples WHERE workspace_id=? AND created_at>=? AND created_at<?",
+        )
+        .get(w, from, to).n,
+      agent: db
+        .prepare(
+          "SELECT count(*) n FROM geo_agent_runs WHERE workspace_id=? AND created_at>=? AND created_at<?",
+        )
+        .get(w, from, to).n,
+    };
+  }
+  const read = (w) => ({
+    subscription: subscription(w),
+    usage: usage(w),
+    invoices: db
+      .prepare("SELECT * FROM geo_invoices WHERE workspace_id=? ORDER BY period DESC LIMIT 24")
+      .all(w),
+  });
+  function change(actor, w, input) {
+    if (!actor.platform_admin || !store.workspace(w))
+      throw Error("Platform administrator required");
+    if (input.action === "set") {
+      if (
+        typeof input.name !== "string" ||
+        !input.name.trim() ||
+        input.name.length > 80 ||
+        !/^[A-Z]{3}$/.test(input.currency || "")
+      )
+        throw Error("Invalid plan");
+      db.prepare(
+        "INSERT INTO geo_subscriptions VALUES(?,?,?,?,?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET name=excluded.name,price_minor=excluded.price_minor,currency=excluded.currency,sample_limit=excluded.sample_limit,agent_limit=excluded.agent_limit,updated_at=excluded.updated_at",
+      ).run(
+        w,
+        input.name.trim(),
+        num(input.priceMinor, 1e12),
+        input.currency,
+        num(input.sampleLimit, 1e6),
+        num(input.agentLimit, 1e6),
+        now(),
+      );
+    } else if (input.action === "invoice") {
+      const s = subscription(w);
+      if (!s || input.period !== month()) throw Error("Current month and assigned plan required");
+      db.prepare("INSERT INTO geo_invoices VALUES(?,?,?,?,?,?,'unpaid',NULL,?,NULL)").run(
+        randomUUID(),
+        w,
+        input.period,
+        s.name,
+        s.price_minor,
+        s.currency,
+        now(),
+      );
+    } else if (input.action === "settle") {
+      if (
+        input.confirm !== true ||
+        typeof input.reference !== "string" ||
+        !input.reference.trim() ||
+        input.reference.length > 200
+      )
+        throw Error("Confirm verified external payment reference");
+      if (
+        !db
+          .prepare(
+            "UPDATE geo_invoices SET state='settled',reference=?,settled_at=? WHERE workspace_id=? AND id=? AND state='unpaid'",
+          )
+          .run(input.reference.trim(), now(), w, input.id).changes
+      )
+        throw Error("Unpaid invoice required");
+    } else throw Error("Unsupported billing operation");
+    return read(w);
+  }
+  function check(w, kind) {
+    const s = subscription(w);
+    if (!s) return;
+    const u = usage(w),
+      limit = kind === "samples" ? s.sample_limit : s.agent_limit;
+    if (u[kind] >= limit) {
+      const e = Error("Workspace monthly " + kind + " quota reached");
+      e.code = "GEO_MONTHLY_QUOTA";
+      throw e;
+    }
+  }
+  return { read, change, check };
 }

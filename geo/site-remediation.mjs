@@ -1,11 +1,77 @@
-import {randomUUID} from "node:crypto";
-const now=()=>new Date().toISOString();
-export function openRemediation(store){
- const {db}=store;db.exec("CREATE TABLE IF NOT EXISTS geo_site_tasks(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),url TEXT NOT NULL,finding TEXT NOT NULL,source_id TEXT NOT NULL,source_kind TEXT NOT NULL,advice TEXT NOT NULL,state TEXT NOT NULL,actor_id TEXT NOT NULL REFERENCES geo_users(id),note TEXT,verification_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(workspace_id,url,finding,source_id));");
- const get=(w,id)=>db.prepare("SELECT * FROM geo_site_tasks WHERE workspace_id=? AND id=?").get(w,id);
- const source=(w,kind,id)=>{const table=kind==="scan"?"geo_site_scans":kind==="audit"?"geo_site_audits":null;if(!table)throw Error("Invalid report type");const r=db.prepare("SELECT * FROM "+table+" WHERE workspace_id=? AND id=? AND state='success'").get(w,id);if(!r)throw Error("Successful report required");return r};
- function create(w,actor,input){const r=source(w,input.kind,input.sourceId),report=JSON.parse(r.report),p=input.kind==="scan"?report.pages.find(p=>p.url===input.url):{url:r.url,report},f=p?.report?.findings.find(f=>f.id===input.finding);if(!f||f.status==="observed")throw Error("Unresolved finding required");const id=randomUUID(),t=now();db.prepare("INSERT INTO geo_site_tasks VALUES(?,?,?,?,?,?,?,'open',?,NULL,NULL,?,?)").run(id,w,p.url,f.id,r.id,input.kind,f.advice,actor,t,t);return get(w,id)}
- function change(w,actor,input){const r=get(w,input.id);if(!r)throw Error("Task not found");if(typeof input.note!=="string"||!input.note.trim()||input.note.length>1000)throw Error("Note required");if(input.action==="implement"&&r.state==="open"){db.prepare("UPDATE geo_site_tasks SET state='implemented',actor_id=?,note=?,updated_at=? WHERE id=?").run(actor,input.note,now(),r.id)}
- else if(input.action==="verify"&&r.state==="implemented"){const a=source(w,"audit",input.auditId);if(a.url!==r.url||a.created_at<=r.updated_at||JSON.parse(a.report).findings.find(f=>f.id===r.finding)?.status!=="observed")throw Error("New matching audit with resolved signal required");db.prepare("UPDATE geo_site_tasks SET state='verified',actor_id=?,note=?,verification_id=?,updated_at=? WHERE id=?").run(actor,input.note,a.id,now(),r.id)}else throw Error("Invalid transition");return get(w,r.id)}
- return {create,change,list:w=>db.prepare("SELECT * FROM geo_site_tasks WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 100").all(w)};
+import { randomUUID } from "node:crypto";
+const now = () => new Date().toISOString();
+export function openRemediation(store) {
+  const { db } = store;
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS geo_site_tasks(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),url TEXT NOT NULL,finding TEXT NOT NULL,source_id TEXT NOT NULL,source_kind TEXT NOT NULL,advice TEXT NOT NULL,state TEXT NOT NULL,actor_id TEXT NOT NULL REFERENCES geo_users(id),note TEXT,verification_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(workspace_id,url,finding,source_id));",
+  );
+  const get = (w, id) =>
+    db.prepare("SELECT * FROM geo_site_tasks WHERE workspace_id=? AND id=?").get(w, id);
+  const source = (w, kind, id) => {
+    const table = kind === "scan" ? "geo_site_scans" : kind === "audit" ? "geo_site_audits" : null;
+    if (!table) throw Error("Invalid report type");
+    const r = db
+      .prepare("SELECT * FROM " + table + " WHERE workspace_id=? AND id=? AND state='success'")
+      .get(w, id);
+    if (!r) throw Error("Successful report required");
+    return r;
+  };
+  function create(w, actor, input) {
+    const r = source(w, input.kind, input.sourceId),
+      report = JSON.parse(r.report),
+      p =
+        input.kind === "scan"
+          ? report.pages.find((p) => p.url === input.url)
+          : { url: r.url, report },
+      f = p?.report?.findings.find((f) => f.id === input.finding);
+    if (!f || f.status === "observed") throw Error("Unresolved finding required");
+    const id = randomUUID(),
+      t = now();
+    db.prepare("INSERT INTO geo_site_tasks VALUES(?,?,?,?,?,?,?,'open',?,NULL,NULL,?,?)").run(
+      id,
+      w,
+      p.url,
+      f.id,
+      r.id,
+      input.kind,
+      f.advice,
+      actor,
+      t,
+      t,
+    );
+    return get(w, id);
+  }
+  function change(w, actor, input) {
+    const r = get(w, input.id);
+    if (!r) throw Error("Task not found");
+    if (typeof input.note !== "string" || !input.note.trim() || input.note.length > 1000)
+      throw Error("Note required");
+    if (input.action === "implement" && r.state === "open") {
+      db.prepare(
+        "UPDATE geo_site_tasks SET state='implemented',actor_id=?,note=?,updated_at=? WHERE id=?",
+      ).run(actor, input.note, now(), r.id);
+    } else if (input.action === "verify" && r.state === "implemented") {
+      const a = source(w, "audit", input.auditId);
+      if (
+        a.url !== r.url ||
+        a.created_at <= r.updated_at ||
+        JSON.parse(a.report).findings.find((f) => f.id === r.finding)?.status !== "observed"
+      )
+        throw Error("New matching audit with resolved signal required");
+      db.prepare(
+        "UPDATE geo_site_tasks SET state='verified',actor_id=?,note=?,verification_id=?,updated_at=? WHERE id=?",
+      ).run(actor, input.note, a.id, now(), r.id);
+    } else throw Error("Invalid transition");
+    return get(w, r.id);
+  }
+  return {
+    create,
+    change,
+    list: (w) =>
+      db
+        .prepare(
+          "SELECT * FROM geo_site_tasks WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 100",
+        )
+        .all(w),
+  };
 }
