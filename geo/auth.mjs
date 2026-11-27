@@ -8,6 +8,7 @@ function digest(password,salt){return scryptSync(password,salt,64,{N:16384,r:8,p
 export function canWrite(role,resource,action,state){
  if(role==="owner")return true;
  if(resource==="members"||resource==="audit")return false;
+ if(resource==="distribution")return role==="editor"&&["channel","create","revise","publish","cancel","metric"].includes(action)||role==="reviewer"&&["approve","reject"].includes(action);
  if(role==="reviewer")return resource==="reviews"||resource==="facts"&&action==="review"||resource==="actions"&&action==="transition"&&["approved","rejected","draft","verified"].includes(state);
  if(role==="editor")return ["prompts","samples","jobs","schedules","imports","evidence","agent"].includes(resource)||resource==="facts"&&action!=="review"||resource==="actions"&&(action==="discover"||action==="draft"||action==="transition"&&state==="implemented");
  return false;
