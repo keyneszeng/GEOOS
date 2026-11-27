@@ -1,5 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
 import {spawn} from "node:child_process";
 import {createServer} from "node:net";
 import {mkdtempSync,rmSync} from "node:fs";
@@ -13,6 +14,7 @@ test("HTTP login, CSRF, roles, workspace isolation and logout", {timeout:20000},
  let stderr="";child.stderr.on("data",x=>stderr+=x);
  async function call(path,data,cookie="",sameOrigin=true){return fetch(origin+path,{method:data===undefined?"GET":"POST",headers:{...(cookie?{cookie}:{}),...(data===undefined?{}:{"content-type":"application/json",...(sameOrigin?{origin}:{})})},...(data===undefined?{}:{body:JSON.stringify(data)})})}
  try{let ready=false;for(let i=0;i<100;i++){try{if((await fetch(origin)).ok){ready=true;break}}catch{}if(child.exitCode!==null)break;await new Promise(r=>setTimeout(r,100))}assert.ok(ready,stderr);
+ const home=await call("/");assert.match(await home.text(),/银河全景/);assert.match(home.headers.get("content-security-policy"),/img-src 'self'/);const photo=await call("/assets/eso0932a.jpg");assert.equal(photo.headers.get("content-type"),"image/jpeg");assert.equal(createHash("sha256").update(Buffer.from(await photo.arrayBuffer())).digest("hex"),"6209819b32ff1be8b3e1fb07dac406d58d632dfb4861c21afdfc49de9aa6223f");assert.match(await (await call("/workbench?view=knowledge")).text(),/登录工作台/);
  assert.equal((await call("/api/workspaces")).status,401);assert.equal((await call("/api/login",{username:"admin",password:"test-password-12345"},"",false)).status,403);
  async function login(username){const r=await call("/api/login",{username,password:"test-password-12345"});assert.equal(r.status,200);const cookie=r.headers.get("set-cookie");assert.match(cookie,/HttpOnly/);return cookie.split(";")[0]}
  const admin=await login("admin");assert.equal((await call("/api/users",{username:"viewer",password:"test-password-12345"},admin)).status,201);

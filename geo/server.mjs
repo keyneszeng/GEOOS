@@ -27,6 +27,7 @@ if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||lim
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
 const bind=process.env.GEO_CONTAINER_BIND==="1"?"0.0.0.0":"127.0.0.1";
 const store=openStore(path),html=readFileSync(new URL("./index.html",import.meta.url)),host="127.0.0.1:"+port,origin="http://"+host;
+const galaxyHtml=readFileSync(new URL("./galaxy.html",import.meta.url)),galaxyPhoto=readFileSync(new URL("./assets/eso0932a.jpg",import.meta.url));
 const auth=openAuth(store,{bootstrapUser:process.env.GEO_ADMIN_USER,bootstrapPassword:process.env.GEO_ADMIN_PASSWORD});
 delete process.env.GEO_ADMIN_PASSWORD;
 const queue=openQueue(store);
@@ -65,7 +66,9 @@ createServer(async(req,res)=>{
  try{
  const url=new URL(req.url,origin);
  if(req.method==="GET"&&url.pathname==="/healthz"){store.db.prepare("SELECT 1").get();return respond(res,200,{ok:true})}
- if(req.method==="GET"&&url.pathname==="/"){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'","X-Content-Type-Options":"nosniff"});return res.end(html)}
+ if(req.method==="GET"&&url.pathname==="/assets/eso0932a.jpg"){res.writeHead(200,{"Content-Type":"image/jpeg","Content-Length":galaxyPhoto.length,"Cache-Control":"public, max-age=86400","X-Content-Type-Options":"nosniff"});return res.end(galaxyPhoto)}
+ if(req.method==="GET"&&url.pathname==="/"){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'","X-Content-Type-Options":"nosniff"});return res.end(galaxyHtml)}
+ if(req.method==="GET"&&url.pathname==="/workbench"){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'","X-Content-Type-Options":"nosniff"});return res.end(html)}
  if(req.method==="POST"&&req.headers.origin!==origin)return respond(res,403,{error:"Same-origin write required"});
  if(req.method==="POST"&&url.pathname==="/api/login"){const token=auth.login(await body(req));if(!token)return respond(res,401,{error:"Invalid credentials"});res.setHeader("Set-Cookie","geo_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800");return respond(res,200,{ok:true})}
  const user=auth.authenticate(req);
