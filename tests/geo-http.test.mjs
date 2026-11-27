@@ -23,6 +23,14 @@ test("HTTP login, CSRF, roles, workspace isolation and logout", {timeout:20000},
  assert.equal((await call(path+"/prompts",{question:"Which tool?"},viewer)).status,403);
  assert.equal((await call(path+"/prompts",{question:"Which tool?"},admin)).status,201);
  assert.equal((await call(path+"/audit",undefined,viewer)).status,403);
+ assert.equal((await call(path+"/members",{username:"viewer",role:"editor"},admin)).status,200);
+ assert.equal((await call(path+"/facts",{action:"review",id:"missing",decision:"approved",note:"x"},viewer)).status,403);
+ const e=await (await call(path+"/evidence",{title:"Spec",excerpt:"Acme supports CSV",url:"https://example.com/",visibility:"public"},viewer)).json();
+ const fact=await (await call(path+"/facts",{subject:"Acme",predicate:"Export",value:"CSV",evidenceId:e.id},viewer)).json();assert.equal(fact.status,"draft");
+ assert.equal((await call(path+"/members",{username:"viewer",role:"reviewer"},admin)).status,200);
+ assert.equal((await call(path+"/evidence",{title:"x",excerpt:"x",visibility:"internal"},viewer)).status,403);
+ const reviewed=await (await call(path+"/facts",{action:"review",id:fact.id,decision:"approved",note:"checked"},viewer)).json();assert.equal(reviewed.status,"approved");
+ const audit=await (await call(path+"/audit",undefined,admin)).json();assert.ok(audit.some(x=>x.username==="viewer"&&x.resource==="facts"&&x.action==="review"));
  assert.equal((await call("/api/users",{username:"bad",password:"test-password-12345"},viewer)).status,403);
  assert.equal((await call(path+"/members",{username:"viewer",action:"remove"},admin)).status,200);
  assert.equal((await call(path+"/prompts",undefined,viewer)).status,404);
