@@ -26,6 +26,7 @@ jobs:
       - run: node --check geo/planner.mjs
       - run: node --check geo/distribution.mjs
       - run: node --check geo/channel-intelligence.mjs
+      - run: node --check geo/channel-copy.mjs
       - name: Build and smoke-test local container
         run: |
           docker build -f Dockerfile.geo -t geo-test .
