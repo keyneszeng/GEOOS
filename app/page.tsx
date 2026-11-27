@@ -664,7 +664,7 @@ export default function GeoWorkbench() {
             <button className="help-button" aria-label="帮助">?</button>
           </div>
         </header>
-        <div className="page-content">{viewContent[activeView]()}</div>
+        <div className="page-content"><p role="note" style={{margin:"0 0 12px",fontSize:"13px",opacity:.8}}>演示模式 · 示例数据；真实监测服务请参见 GitHub README。</p>{viewContent[activeView]()}</div>
       </main>
 
       {showPromptModal ? (

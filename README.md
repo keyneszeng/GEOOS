@@ -88,3 +88,22 @@ worker/
 ## 数据与安全
 
 仓库不包含真实客户资料、API 密钥或本地 Obsidian 原始笔记。生产环境接入企业数据时，应将公开可引用资产与内部机密知识分层管理，并通过服务端权限控制保护写操作。
+
+## 真实监测服务（阶段一 MVP）
+
+原在线演示保留。新增独立本地服务，不依赖 D1 或前端构建。Node.js >=22.13.0，内置 SQLite（可能显示实验性警告）。
+
+```bash
+# 从安全终端环境注入供应商密钥，不要提交到 Git
+# DeepSeek: DEEPSEEK_API_KEY + GEO_DEEPSEEK_MODEL（账户可用模型 ID）
+# Perplexity: PERPLEXITY_API_KEY
+npm run geo:live
+# 打开 http://127.0.0.1:3100
+npm run geo:test
+```
+
+- 多工作区、品牌别名、竞品和无品牌决策问题，持久化至 .geo-data/geo.sqlite（GEO_DB 可覆盖）。
+- DeepSeek Chat Completions / Perplexity Agent API；原始响应、明确引用、检索来源分开记录。
+- GEO_DAILY_LIMIT 默认 30（UTC，全局，含失败尝试），GEO_PORT 默认 3100。手动采样可能计费，不自动重试或定时采样。
+- 仅绑定 127.0.0.1，校验 Host/Origin；单操作员本地使用，**不可直接代理到公网**。不得将 API 样本视为消费者 AI 产品排名。只统计文本提及率及含引用回答比例，不代表推荐率、企业信源引用率或准确率。链接未验证可访问性。
+- 后续：定时队列、权限隔离、业务 UI/API 合并、事实证据与机会生成。
