@@ -15,7 +15,7 @@ export function allowedUrl(value,hosts){
  if(u.protocol!=="https:"||u.username||u.password||u.port||u.search||u.hash||isIP(u.hostname)||!hosts.includes(u.hostname))throw Error("URL must use an explicitly allowed HTTPS hostname, without credentials, query or fragment");
  return u;
 }
-export async function fetchPublicPage(value,hosts,{resolve=resolve4,request=httpsRequest}={}){
+export async function fetchPublicPage(value,hosts,{resolve=resolve4,request=httpsRequest,xml=false,userAgent="GEOOS-Evidence/0.1"}={}){
  const u=allowedUrl(value,hosts);
  // Resolve once and pin the actual connection to the checked address (DNS rebinding protection).
  let timer;const ips=await Promise.race([resolve(u.hostname),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error("DNS timeout")),5000)})]).finally(()=>clearTimeout(timer));
@@ -23,9 +23,9 @@ export async function fetchPublicPage(value,hosts,{resolve=resolve4,request=http
  const ip=ips[0];
  return new Promise((resolve,reject)=>{
   let done=false,t;const finish=(err,result)=>{if(done)return;done=true;clearTimeout(t);err?reject(err):resolve(result)};
-  const req=request(u,{method:"GET",family:4,autoSelectFamily:false,agent:false,headers:{"User-Agent":"GEOOS-Evidence/0.1","Accept":"text/html,text/plain","Accept-Encoding":"identity"},lookup:(_host,opts,cb)=>opts.all?cb(null,[{address:ip,family:4}]):cb(null,ip,4)},res=>{
+  const req=request(u,{method:"GET",family:4,autoSelectFamily:false,agent:false,headers:{"User-Agent":userAgent,"Accept":xml?"text/html,text/plain,application/xml,text/xml":"text/html,text/plain","Accept-Encoding":"identity"},lookup:(_host,opts,cb)=>opts.all?cb(null,[{address:ip,family:4}]):cb(null,ip,4)},res=>{
    const type=String(res.headers["content-type"]||"").toLowerCase();
-   if(res.statusCode!==200||!/^(text\/html|text\/plain)(?:;|$)/.test(type)||res.headers["content-encoding"]&&res.headers["content-encoding"]!=="identity"||/charset\s*=\s*["']?(?!utf-8\b|utf8\b)[a-z0-9-]+/i.test(type)){res.destroy();finish(Error("Only HTTP 200 uncompressed UTF-8 HTML or text is supported"));return}
+   if(res.statusCode!==200||!(xml?/^(text\/html|text\/plain|application\/xml|text\/xml)(?:;|$)/:/^(text\/html|text\/plain)(?:;|$)/).test(type)||res.headers["content-encoding"]&&res.headers["content-encoding"]!=="identity"||/charset\s*=\s*["']?(?!utf-8\b|utf8\b)[a-z0-9-]+/i.test(type)){res.destroy();finish(Error("Only HTTP 200 uncompressed UTF-8 HTML or text is supported"));return}
    let n=0;const chunks=[];
    res.on("data",chunk=>{n+=chunk.length;if(n>512*1024){res.destroy();finish(Error("Page exceeds 512 KiB"));return}chunks.push(chunk)});
    res.on("error",e=>finish(e));res.on("aborted",()=>finish(Error("Response aborted")));

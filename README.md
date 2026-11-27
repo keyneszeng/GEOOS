@@ -180,3 +180,7 @@ npm run geo:test
 ### 阶段 2.4：企业官网静态技术诊断
 
 机会洞察新增授权单页诊断及历史对比。复用 GEO_IMPORT_HOSTS 精确白名单、公网 IPv4 DNS 固定连接、HTTPS、无重定向、512 KiB/超时限制；单独 GEO_SITE_AUDIT_DAILY_LIMIT 默认 5（1–50，UTC，含失败），owner/editor 明确确认后执行。读取 HTML 与 X-Robots-Tag，检测标题、描述、语言、H1、简化正文、索引及摘要限制、canonical、JSON-LD 语法与类型、图片 alt。保存内容哈希和证据摘要、整改建议、相同 URL 上次成功诊断状态差异。不执行 JS，不读取 robots.txt 或 sitemap，不验证 Schema.org 语义、真实索引或 AI 排名；静态解析是启发式，不是浏览器 DOM。检测到限制须先确认业务意图，不自动修改网站。测试使用模拟响应，实际官网联调未执行。
+
+### 阶段 2.5：站点诊断、整改与结构化数据
+
+授权同源有限扫描每次最多 10 页、3 个 sitemap、全局每日 3 次；robots.txt 无法读取时停止，匹配禁抓规则保守跳过，不实现完整 RFC 规则或爬虫模拟。只读取白名单公开 HTTPS，静态解析，非无限全站覆盖。整改任务关联原报告及问题；登记整改后需更新的同 URL 单页诊断显示对应信号改善才能复核。结构化数据支持 Organization/WebSite/Article 三种模板，校验字段与 HTTPS URL，不代表完整 Schema.org 语义或富结果资格，不自动写入网站。

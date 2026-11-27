@@ -16,6 +16,9 @@ import {openPlanner} from "./planner.mjs";
 import {openDistribution} from "./distribution.mjs";
 import {openChannelIntelligence} from "./channel-intelligence.mjs";
 import {openSiteAudit} from "./site-audit.mjs";
+import {openSiteScan} from "./site-scan.mjs";
+import {openRemediation} from "./site-remediation.mjs";
+import {schemaTool} from "./schema-tools.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
@@ -29,6 +32,8 @@ const distribution=openDistribution(store,knowledge);
 const agent=openAgent(store,knowledge,actions,{distribution,limit:Number(process.env.GEO_AGENT_DAILY_LIMIT||5)});
 const importer=openImporter(store,knowledge,{hosts:(process.env.GEO_IMPORT_HOSTS||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean),limit:Number(process.env.GEO_IMPORT_DAILY_LIMIT||10)});
 const siteAudits=openSiteAudit(store,{hosts:importer.hosts,limit:Number(process.env.GEO_SITE_AUDIT_DAILY_LIMIT||5)});
+const scans=openSiteScan(store,{hosts:importer.hosts});
+const remediation=openRemediation(store);
 const reviews=openReviews(store,knowledge);
 let planner;
 const workflows=openWorkflows(store,knowledge,actions,agent,auth,{providers:configuredProviders,authorize:r=>planner?.authorized(r)??true});
@@ -62,7 +67,7 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&url.pathname==="/api/users"){if(!user.platform_admin)return respond(res,403,{error:"Platform admin required"});return respond(res,201,auth.provision(user,await body(req)))}
  if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{user,workspaces:auth.list(user.id),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit,auditLimit:siteAudits.limit});
  if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,auth.createWorkspace(user.id,await body(req)));
- const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution|channel-intelligence|site-audits)$/);
+ const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution|channel-intelligence|site-audits|site-scans|site-tasks|schema)$/);
  if(!match)return respond(res,404,{error:"Not found"});
  const [,id,resource]=match;const role=auth.role(id,user.id);if(!role)return respond(res,404,{error:"Workspace not found"});
  if(["members","audit"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
@@ -74,6 +79,9 @@ createServer(async(req,res)=>{
  if(req.method==="GET"&&resource==="members")return respond(res,200,auth.members(id));
  if(req.method==="GET"&&resource==="audit")return respond(res,200,auth.logs(id));
  if(req.method==="GET"){
+  if(resource==="site-scans")return respond(res,200,scans.recent(id));
+  if(resource==="site-tasks")return respond(res,200,remediation.list(id));
+  if(resource==="schema")return respond(res,405,{error:"Use POST"});
   if(resource==="site-audits")return respond(res,200,url.searchParams.has("id")?siteAudits.compare(id,url.searchParams.get("id")):siteAudits.recent(id));
   if(resource==="channel-intelligence")return respond(res,200,url.searchParams.has("month")?channels.calendar(id,url.searchParams.get("month")):url.searchParams.has("id")?channels.citations(id,url.searchParams.get("id"),Number(url.searchParams.get("days")||30)):channels.links(id));
   if(resource==="distribution")return respond(res,200,url.searchParams.has("id")?distribution.history(id,url.searchParams.get("id")):url.searchParams.has("age")?distribution.review(id,Number(url.searchParams.get("age"))):distribution.list(id));
@@ -93,6 +101,9 @@ createServer(async(req,res)=>{
   if(resource==="analysis")return respond(res,200,analyze(store.db.prepare("SELECT id,prompt_id,question,provider,model,status,mentioned,competitor_hits,citations FROM samples WHERE workspace_id=? AND created_at>=? ORDER BY created_at DESC").all(id,new Date(Date.now()-30*86400000).toISOString())));
   return respond(res,200,resource==="prompts"?store.prompts(id):resource==="samples"?store.history(id):store.stats(id));
  }
+ if(req.method==="POST"&&resource==="site-scans"){if(data.action!=="run")throw Error("Unsupported scan action");return write(201,await scans.run(id,user.id,data))}
+ if(req.method==="POST"&&resource==="site-tasks")return write(200,data.action==="create"?remediation.create(id,user.id,data):remediation.change(id,user.id,data));
+ if(req.method==="POST"&&resource==="schema")return respond(res,200,schemaTool(data));
  if(req.method==="POST"&&resource==="site-audits"){if(data.action!=="run")throw Error("Unsupported audit action");return write(201,await siteAudits.run(id,user.id,data))}
  if(req.method==="POST"&&resource==="channel-intelligence"){if(data.action!=="link")throw Error("Unsupported channel operation");return write(201,channels.createLink(id,user.id,data))}
  if(req.method==="POST"&&resource==="distribution"){const d=data;if(d.action==="channel")return write(201,distribution.channel(id,d));if(d.action==="create")return write(201,distribution.create(id,user.id,d));if(d.action==="metric")return write(201,distribution.metric(id,user.id,d));return write(200,distribution.change(id,user.id,d))}
