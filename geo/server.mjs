@@ -24,13 +24,13 @@ const auth=openAuth(store,{bootstrapUser:process.env.GEO_ADMIN_USER,bootstrapPas
 delete process.env.GEO_ADMIN_PASSWORD;
 const queue=openQueue(store);
 const knowledge=openKnowledge(store),actions=openActions(store,knowledge);
-const agent=openAgent(store,knowledge,actions,{limit:Number(process.env.GEO_AGENT_DAILY_LIMIT||5)});
+const distribution=openDistribution(store,knowledge);
+const agent=openAgent(store,knowledge,actions,{distribution,limit:Number(process.env.GEO_AGENT_DAILY_LIMIT||5)});
 const importer=openImporter(store,knowledge,{hosts:(process.env.GEO_IMPORT_HOSTS||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean),limit:Number(process.env.GEO_IMPORT_DAILY_LIMIT||10)});
 const reviews=openReviews(store,knowledge);
 let planner;
 const workflows=openWorkflows(store,knowledge,actions,agent,auth,{providers:configuredProviders,authorize:r=>planner?.authorized(r)??true});
 planner=openPlanner(store,knowledge,workflows,auth,{providers:configuredProviders,limit:Number(process.env.GEO_AUTO_DAILY_LIMIT||3)});
-const distribution=openDistribution(store,knowledge);
 const channels=openChannelIntelligence(store);
 let busy=false;
 function respond(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(JSON.stringify(data))}
@@ -96,7 +96,7 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&resource==="workflows")return write(200,data.action==="create"?workflows.create(id,user.id,data):workflows.control(id,user.id,data));
  if(req.method==="POST"&&resource==="imports")return write(200,await importer.run(id,data));
  if(req.method==="POST"&&resource==="reviews")return write(200,reviews.review(id,data));
- if(req.method==="POST"&&resource==="agent"){const d=data;if(d.action==="run")return write(200,await agent.run(id,d));if(d.action==="adopt")return write(200,agent.adopt(id,d));throw Error("Unsupported agent action")}
+ if(req.method==="POST"&&resource==="agent"){const d=data;if(d.action==="run")return write(200,await agent.run(id,d));if(d.action==="adopt")return write(200,agent.adopt(id,d,user.id));throw Error("Unsupported agent action")}
  if(req.method==="POST"&&resource==="evidence")return write(201,knowledge.addEvidence(id,data));
  if(req.method==="POST"&&resource==="facts"){const d=data;return write(200,d.action==="review"?knowledge.review(id,d):knowledge.propose(id,d))}
  if(req.method==="POST"&&resource==="actions"){const d=data;if(d.action==="discover")return write(200,actions.discover(id));if(d.action==="draft")return write(200,actions.draft(id,d));if(d.action==="transition")return write(200,actions.transition(id,d));throw Error("Unsupported action")}
