@@ -152,3 +152,9 @@ npm run geo:test
 - 安全本地 Docker：创建不提交的 `.env.geo`，设置首次管理员、所需供应商密钥与模型；运行 `docker compose -f compose.geo.yml up -d --build`，访问 `http://127.0.0.1:3100`。仅发布宿主机 loopback，容器内部非 root、只读根文件系统、持久卷 `/data`。`GEO_CONTAINER_BIND=1` 仅供该容器模式，不能直接公网部署。初始化后从 env 文件删除管理员初始密码；容器运行时环境仍可能被 Docker 管理员查看。
 - 本地数据库备份：`node geo/backup.mjs backup .geo-data/geo.sqlite /secure/path/backup.sqlite`，使用 SQLite VACUUM INTO 生成一致快照（包含 WAL 已提交数据）；备份包含企业敏感信息、密码哈希、会话哈希，需独立加密保管。恢复：`node geo/backup.mjs restore /secure/path/backup.sqlite /secure/path/restored.sqlite`。禁止覆盖已有数据库/sidecar；恢复到新库后撤销会话、停用自动采样计划、取消待采样任务，运行中任务由启动恢复逻辑标记中断。确认后手工停止旧实例并用 GEO_DB 指向新库，不要同时启动两个实例。无远程备份、自动保留、加密或灾备演练服务。
 - 健康检查 `/healthz` 不返回业务数据。CI 新增适配器、备份恢复及 Docker 构建/启动检查，不等同于生产上线。
+
+### 阶段 4.4：持久化 Agent 工作流
+
+- owner/editor 可选择一个成功监测样本、已配置非 openai-web Agent 供应商及最多 10 条当前已审核公开事实，明确确认传输及最多两次潜在计费调用后排队。服务每 5 秒推进一步：语境分析候选 → 同问题/供应商/模型机会发现 → 有当前机会、开放任务和公开事实时生成内容候选。不会自动采样、采用候选、审核、执行外部发布或重复运行。
+- 独立任务状态和步骤日志，支持排队/步骤间暂停、继续、取消；运行中的暂停会在当前步骤结束后生效，不能撤回已经发出的 API 请求。中断与失败不自动重放；共享现有 Agent 每日额度，额度耗尽时工作流失败。每步检查原始操作者角色与事实版本，撤权后不继续发送。恢复备份取消未完成工作流。
+- 当前为单次人工启动的固定流程，并非全天候自主策略、跨平台 Agent 通信或通用 DAG。Agent 输出仍需人工采用与审核。通过注入模拟模型测试，不代表真实付费调用已联调。

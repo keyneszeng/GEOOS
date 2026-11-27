@@ -84,5 +84,5 @@ export function openAgent(store,knowledge,actions,{request=sample,providers=conf
   if(r.kind==="compose"){if(item!==0)throw Error("Invalid candidate index");const factIds=[...new Set(result.sections.flatMap(s=>s.factIds))];const outline=result.sections.map(s=>s.heading+"\n"+s.text+"\n事实版本："+s.factIds.join(", ")).join("\n\n");return actions.draft(w,{id:r.target_id,factIds,outline},link,"AI 生成优化提纲（待人工审核）")}
   throw Error("Assessment is a review candidate; it cannot change facts");
  }
- return {run,recent,adopt,limit};
+ return {run,recent,adopt,limit,isBusy:()=>running};
 }
