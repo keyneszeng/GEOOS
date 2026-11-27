@@ -29,7 +29,7 @@ export async function fetchPublicPage(value,hosts,{resolve=resolve4,request=http
    let n=0;const chunks=[];
    res.on("data",chunk=>{n+=chunk.length;if(n>512*1024){res.destroy();finish(Error("Page exceeds 512 KiB"));return}chunks.push(chunk)});
    res.on("error",e=>finish(e));res.on("aborted",()=>finish(Error("Response aborted")));
-   res.on("end",()=>{try{finish(null,{url:u.href,type,text:new TextDecoder("utf-8",{fatal:true}).decode(Buffer.concat(chunks))})}catch(e){finish(e)}});
+   res.on("end",()=>{try{finish(null,{url:u.href,type,robotsHeader:String(res.headers["x-robots-tag"]||"").slice(0,1000),text:new TextDecoder("utf-8",{fatal:true}).decode(Buffer.concat(chunks))})}catch(e){finish(e)}});
   });
   t=setTimeout(()=>{req.destroy();finish(Error("Page request timeout"))},15000);req.on("error",e=>finish(e));req.end();
  });
