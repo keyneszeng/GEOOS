@@ -14,3 +14,5 @@ jobs:
       - run: node --check geo/server.mjs
       - run: node --check geo/queue.mjs
       - run: node --check geo/analysis.mjs
+      - run: node --check geo/knowledge.mjs
+      - run: node --check geo/actions.mjs
