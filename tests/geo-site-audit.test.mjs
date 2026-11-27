@@ -1,11 +1,79 @@
-import {test} from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
-import {openStore} from "../geo/store.mjs";
-import {openAuth,canWrite} from "../geo/auth.mjs";
-import {inspectPage,openSiteAudit} from "../geo/site-audit.mjs";
-const url="https://example.com/page";
-const page=(text,robotsHeader="")=>({url,type:"text/html; charset=utf-8",text,robotsHeader});
-const status=(r,id)=>r.findings.find(f=>f.id===id).status;
-test("static HTML signals, case-insensitive quoted attributes and JSON-LD graph",()=>{const r=inspectPage(page('<html lang="zh"><head><title>Example</title><meta content="Summary" NAME="description"><link rel="canonical" href="/page"><script type="application/ld+json">{"@graph":[{"@type":"Organization"},{"@type":"Article"}]}</script></head><body><h1>Title</h1><p>'+("Readable factual content. ".repeat(10))+'</p><img alt="" src="a.png"></body></html>'));for(const f of r.findings)assert.equal(f.status,"observed",f.id);assert.match(r.findings.find(f=>f.id==="jsonld").evidence,/Organization/);assert.equal(r.contentHash.length,64)});
-test("index and snippet constraints, invalid structured data, absent alt, and commented tags",()=>{const r=inspectPage(page('<!-- <title>fake</title> --><meta name="robots" content="noindex"><script type="application/ld+json">{bad}</script><script>var fake="<h1>fake</h1>";</script><img src="a.png">',"googlebot: nosnippet"));assert.equal(status(r,"title"),"review");assert.equal(status(r,"heading"),"review");assert.equal(status(r,"index-directive"),"attention");assert.equal(status(r,"snippet-directive"),"attention");assert.equal(status(r,"jsonld"),"attention");assert.equal(status(r,"image-alt"),"review");assert.throws(()=>inspectPage({type:"text/plain",text:"plain"}))});
-test("authorized audit history, comparison, quota and workspace boundary",async()=>{const s=openStore(":memory:");try{const a=openAuth(s,{bootstrapUser:"admin",bootstrapPassword:"test-password-12345"}),token=a.login({username:"admin",password:"test-password-12345"}),u=a.authenticate({headers:{cookie:"geo_session="+token}}),w=a.createWorkspace(u.id,{name:"A",brand:"Acme"}),b=a.createWorkspace(u.id,{name:"B",brand:"Other"});let calls=0;const audit=openSiteAudit(s,{hosts:["example.com"],limit:2,fetchPage:async()=>page(++calls===1?'<meta name="robots" content="noindex">':'<title>Fixed</title>')});await assert.rejects(audit.run(w.id,u.id,{url,confirm:false}));await assert.rejects(audit.run(w.id,u.id,{url:"https://127.0.0.1/",confirm:true}));const r=await audit.run(w.id,u.id,{url,confirm:true}),r2=await audit.run(w.id,u.id,{url,confirm:true});assert.equal(r.state,"success");assert.equal(r2.state,"success");assert.equal(audit.compare(w.id,r2.id).previousId,r.id);assert.ok(audit.compare(w.id,r2.id).changes.some(c=>c.id==="index-directive"&&c.before==="attention"&&c.after==="observed"));assert.equal(audit.recent(b.id).length,0);assert.throws(()=>audit.compare(b.id,r2.id));await assert.rejects(audit.run(w.id,u.id,{url,confirm:true}));assert.equal(calls,2);assert.equal(canWrite("editor","site-audits","run"),true);assert.equal(canWrite("viewer","site-audits","run"),false)}finally{s.db.close()}});
+import { openStore } from "../geo/store.mjs";
+import { openAuth, canWrite } from "../geo/auth.mjs";
+import { inspectPage, openSiteAudit } from "../geo/site-audit.mjs";
+const url = "https://example.com/page";
+const page = (text, robotsHeader = "") => ({
+  url,
+  type: "text/html; charset=utf-8",
+  text,
+  robotsHeader,
+});
+const status = (r, id) => r.findings.find((f) => f.id === id).status;
+test("static HTML signals, case-insensitive quoted attributes and JSON-LD graph", () => {
+  const r = inspectPage(
+    page(
+      '<html lang="zh"><head><title>Example</title><meta content="Summary" NAME="description"><link rel="canonical" href="/page"><script type="application/ld+json">{"@graph":[{"@type":"Organization"},{"@type":"Article"}]}</script></head><body><h1>Title</h1><p>' +
+        "Readable factual content. ".repeat(10) +
+        '</p><img alt="" src="a.png"></body></html>',
+    ),
+  );
+  for (const f of r.findings) assert.equal(f.status, "observed", f.id);
+  assert.match(r.findings.find((f) => f.id === "jsonld").evidence, /Organization/);
+  assert.equal(r.contentHash.length, 64);
+});
+test("index and snippet constraints, invalid structured data, absent alt, and commented tags", () => {
+  const r = inspectPage(
+    page(
+      '<!-- <title>fake</title> --><meta name="robots" content="noindex"><script type="application/ld+json">{bad}</script><script>var fake="<h1>fake</h1>";</script><img src="a.png">',
+      "googlebot: nosnippet",
+    ),
+  );
+  assert.equal(status(r, "title"), "review");
+  assert.equal(status(r, "heading"), "review");
+  assert.equal(status(r, "index-directive"), "attention");
+  assert.equal(status(r, "snippet-directive"), "attention");
+  assert.equal(status(r, "jsonld"), "attention");
+  assert.equal(status(r, "image-alt"), "review");
+  assert.throws(() => inspectPage({ type: "text/plain", text: "plain" }));
+});
+test("authorized audit history, comparison, quota and workspace boundary", async () => {
+  const s = openStore(":memory:");
+  try {
+    const a = openAuth(s, { bootstrapUser: "admin", bootstrapPassword: "test-password-12345" }),
+      token = a.login({ username: "admin", password: "test-password-12345" }),
+      u = a.authenticate({ headers: { cookie: "geo_session=" + token } }),
+      w = a.createWorkspace(u.id, { name: "A", brand: "Acme" }),
+      b = a.createWorkspace(u.id, { name: "B", brand: "Other" });
+    let calls = 0;
+    const audit = openSiteAudit(s, {
+      hosts: ["example.com"],
+      limit: 2,
+      fetchPage: async () =>
+        page(++calls === 1 ? '<meta name="robots" content="noindex">' : "<title>Fixed</title>"),
+    });
+    await assert.rejects(audit.run(w.id, u.id, { url, confirm: false }));
+    await assert.rejects(audit.run(w.id, u.id, { url: "https://127.0.0.1/", confirm: true }));
+    const r = await audit.run(w.id, u.id, { url, confirm: true }),
+      r2 = await audit.run(w.id, u.id, { url, confirm: true });
+    assert.equal(r.state, "success");
+    assert.equal(r2.state, "success");
+    assert.equal(audit.compare(w.id, r2.id).previousId, r.id);
+    assert.ok(
+      audit
+        .compare(w.id, r2.id)
+        .changes.some(
+          (c) => c.id === "index-directive" && c.before === "attention" && c.after === "observed",
+        ),
+    );
+    assert.equal(audit.recent(b.id).length, 0);
+    assert.throws(() => audit.compare(b.id, r2.id));
+    await assert.rejects(audit.run(w.id, u.id, { url, confirm: true }));
+    assert.equal(calls, 2);
+    assert.equal(canWrite("editor", "site-audits", "run"), true);
+    assert.equal(canWrite("viewer", "site-audits", "run"), false);
+  } finally {
+    s.db.close();
+  }
+});

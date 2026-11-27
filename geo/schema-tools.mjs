@@ -1,4 +1,64 @@
-const templates={Organization:{required:["name","url"],optional:["description","logo"]},WebSite:{required:["name","url"],optional:["description"]},Article:{required:["headline","url"],optional:["description","datePublished","dateModified"]}};
-function validate(type,fields){if(!Object.hasOwn(templates,type)||!fields||typeof fields!=="object"||Array.isArray(fields))throw Error("Unsupported schema type");const {required,optional}=templates[type],out={"@context":"https://schema.org","@type":type};for(const k of [...required,...optional]){const v=fields[k];if(v==null||v===""){if(required.includes(k))throw Error("Missing "+k);continue}if(typeof v!=="string"||!v.trim()||v.length>2000)throw Error("Invalid "+k);if(["url","logo"].includes(k)){const u=new URL(v);if(u.protocol!=="https:"||u.username||u.password)throw Error("HTTPS URL required")}if(k.startsWith("date")&&!/^\d{4}-\d{2}-\d{2}$/.test(v))throw Error("Date YYYY-MM-DD required");out[k]=v.trim()}if(Object.keys(fields).some(k=>![...required,...optional].includes(k)))throw Error("Unsupported field");return out}
-export function schemaTool(input){if(input.action==="generate"){if(input.confirm!==true)throw Error("Confirm all values match visible public page");const value=validate(input.type,input.fields);return {value,html:'<script type="application/ld+json">'+JSON.stringify(value,null,2).replace(/</g,"\\u003c")+"</script>",limitations:"Local template validation only; not search eligibility or full Schema.org validation."}}
- if(input.action==="validate"){const v=input.value;if(!v||v["@context"]!=="https://schema.org")throw Error("Expected Schema.org context");const {"@context":_c,"@type":type,...fields}=v;return {value:validate(type,fields),valid:true,limitations:"Supported template fields only; human verification against visible page required."}}throw Error("Unsupported schema action")}
+const templates = {
+  Organization: { required: ["name", "url"], optional: ["description", "logo"] },
+  WebSite: { required: ["name", "url"], optional: ["description"] },
+  Article: {
+    required: ["headline", "url"],
+    optional: ["description", "datePublished", "dateModified"],
+  },
+};
+function validate(type, fields) {
+  if (
+    !Object.hasOwn(templates, type) ||
+    !fields ||
+    typeof fields !== "object" ||
+    Array.isArray(fields)
+  )
+    throw Error("Unsupported schema type");
+  const { required, optional } = templates[type],
+    out = { "@context": "https://schema.org", "@type": type };
+  for (const k of [...required, ...optional]) {
+    const v = fields[k];
+    if (v == null || v === "") {
+      if (required.includes(k)) throw Error("Missing " + k);
+      continue;
+    }
+    if (typeof v !== "string" || !v.trim() || v.length > 2000) throw Error("Invalid " + k);
+    if (["url", "logo"].includes(k)) {
+      const u = new URL(v);
+      if (u.protocol !== "https:" || u.username || u.password) throw Error("HTTPS URL required");
+    }
+    if (k.startsWith("date") && !/^\d{4}-\d{2}-\d{2}$/.test(v))
+      throw Error("Date YYYY-MM-DD required");
+    out[k] = v.trim();
+  }
+  if (Object.keys(fields).some((k) => ![...required, ...optional].includes(k)))
+    throw Error("Unsupported field");
+  return out;
+}
+export function schemaTool(input) {
+  if (input.action === "generate") {
+    if (input.confirm !== true) throw Error("Confirm all values match visible public page");
+    const value = validate(input.type, input.fields);
+    return {
+      value,
+      html:
+        '<script type="application/ld+json">' +
+        JSON.stringify(value, null, 2).replace(/</g, "\\u003c") +
+        "</script>",
+      limitations:
+        "Local template validation only; not search eligibility or full Schema.org validation.",
+    };
+  }
+  if (input.action === "validate") {
+    const v = input.value;
+    if (!v || v["@context"] !== "https://schema.org") throw Error("Expected Schema.org context");
+    const { "@context": _c, "@type": type, ...fields } = v;
+    return {
+      value: validate(type, fields),
+      valid: true,
+      limitations:
+        "Supported template fields only; human verification against visible page required.",
+    };
+  }
+  throw Error("Unsupported schema action");
+}

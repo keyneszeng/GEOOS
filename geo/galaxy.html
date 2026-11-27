@@ -1,15 +1,737 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GEO/OS · 银河全景</title><style>
-:root{color-scheme:dark;--fg:#eef3fa;--muted:#a9b5c6;--line:#ffffff24}*{box-sizing:border-box}body{margin:0;background:#030407;color:var(--fg);font:14px/1.55 system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}button,a,input{font:inherit}button{color:var(--fg);background:#15202cda;border:1px solid var(--line);border-radius:7px;padding:8px 12px;cursor:pointer}button:hover,button[aria-pressed=true]{background:#263a4c;border-color:#7aa9c6}button:disabled{opacity:.45;cursor:not-allowed}a{color:#c0def2}header{position:relative;z-index:4;background:#080d16f2;border-bottom:1px solid var(--line);padding:14px 22px 10px}.brand{display:flex;align-items:center;gap:14px;margin-bottom:10px}.brand strong{letter-spacing:.12em;font-size:23px}.brand small{color:var(--muted);letter-spacing:.08em}.brand .right{margin-left:auto;color:var(--muted);font-size:12px}nav{display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}nav button{white-space:nowrap;border-color:transparent;background:none;padding:8px 10px;font-size:13px}nav button[aria-pressed=true]{background:#1b2a38;border-color:#7aa9c660}body{display:flex;flex-direction:column;height:100dvh;min-height:0}main{position:relative;flex:1;min-height:0;overflow:hidden}#viewport{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background:#020306}#viewport:active{cursor:grabbing}#flat{position:absolute;inset:0;background-repeat:repeat-x;background-position:center;background-color:#020306}canvas{width:100%;height:100%;position:absolute;inset:0}#notice{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);max-width:90%;width:480px;text-align:center;padding:20px;background:#0a111bdc;border:1px solid var(--line);border-radius:12px;z-index:2}#notice p{color:var(--muted)}.intro{position:absolute;top:22px;left:22px;pointer-events:none;text-shadow:0 2px 7px #000,0 0 16px #000}.intro small{letter-spacing:.17em;font-size:11px;color:#aebaca}.intro h1{font-size:26px;margin:4px 0 0;font-weight:600}.intro p{margin:4px 0;color:#c5d0de;font-size:12px}.controls{position:absolute;bottom:52px;left:22px;display:flex;flex-wrap:wrap;gap:6px;z-index:3;max-width:calc(100% - 44px)}.controls button{font-size:12px;backdrop-filter:blur(10px)}footer{position:absolute;bottom:0;left:0;right:0;background:#050910eb;border-top:1px solid var(--line);padding:9px 22px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:11px;z-index:4}footer span{color:var(--muted)}footer a{white-space:nowrap}#status{margin-left:auto}#panel{position:absolute;top:18px;right:20px;width:min(375px,calc(100% - 40px));background:#0b1422f5;border:1px solid var(--line);border-radius:12px;padding:20px;z-index:5;box-shadow:0 10px 40px #0008}#panel h2{font-size:20px;margin:2px 0 12px}#panel p{color:#b8c7d5}#panel ol{padding-left:20px}#panel li{padding:6px 0;border-bottom:1px solid #ffffff12}#close{float:right;padding:4px 10px}#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}[hidden]{display:none!important}@media(max-width:650px){header{padding:9px 12px 6px}.brand small,.brand .right{display:none}.brand{margin-bottom:6px}main{min-height:0}.intro{top:15px;left:14px}.intro h1{font-size:21px}.controls{bottom:83px;left:12px;max-width:calc(100% - 24px)}footer{padding:8px 12px;gap:6px}#status{margin-left:0;width:100%}#panel{right:12px;width:calc(100% - 24px)}}
-nav a{white-space:nowrap;color:var(--fg);text-decoration:none;border:1px solid transparent;border-radius:7px;padding:8px 10px;font-size:13px}nav a:hover,nav a:focus-visible{background:#263a4c;border-color:#7aa9c6}.brand .right{font-size:12px}#notice a{color:#c0def2}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}</style></head><body><header><div class="brand"><strong>GEO/OS</strong><small>GENERATIVE ENGINE OPTIMIZATION</small><span class="right">企业品牌认知工作台</span></div><nav id="nav" aria-label="业务导航"></nav></header><main><div id="viewport" tabindex="0" aria-label="银河全景，方向键环视，滚轮缩放"><div id="flat"></div><canvas id="sphere" hidden></canvas><canvas id="sphereCpu" hidden></canvas></div><div id="notice" role="status"><strong id="noticeTitle">正在加载</strong><p id="noticeText">正在读取本地资源。</p><a href="https://cdn.eso.org/images/large/eso0932a.jpg" target="_blank" rel="noopener">ESO 官方图像</a>　</div><div class="controls"><button id="full" aria-pressed="true">全天原图</button><button id="immersive" aria-pressed="false" disabled>沉浸环视</button><button id="minus" disabled>−</button><button id="plus" disabled>＋</button><button id="auto" aria-pressed="false" disabled>自动漫游</button></div><footer><a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">ESO/S. Brunier</a><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a><span id="status" hidden aria-live="polite">等待图像</span></footer></main><script>
-'use strict';const $=id=>document.getElementById(id);const url='/assets/eso0932a.jpg';const modules=[["dashboard","GEO 指挥舱"],["knowledge","01 知识底座"],["monitor","02 AI 监测"],["risk","03 回答复核"],["insights","04 机会洞察"],["site","05 官网诊断"],["content","06 优化行动"],["distribution","07 内容分发"],["roi","08 效果复盘"],["automation","自动化运营"],["setup","企业与权限"]];for(const [view,label] of modules){const a=document.createElement("a");a.textContent=label;a.href="/workbench?view="+encodeURIComponent(view);$("nav").append(a)}
-let loaded=false,mode='flat',zoom=1,yaw=0,pitch=0,fov=100,auto=false,drag=null,raf=0,last=0,src=url,localURL=null,loadId=0,imgW=2048,imgH=1024,gl=null,program=null,texture=null,canSphere=false,cpu=null,autoFrame=0;const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),wrap=a=>((a+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
-const vert='attribute vec2 pos;varying vec2 v;void main(){v=pos;gl_Position=vec4(pos,0.,1.);}';const frag='precision highp float;varying vec2 v;uniform sampler2D sky;uniform float aspect,scale,yaw,pitch;const float PI=3.141592653589793;void main(){vec3 d=normalize(vec3(v.x*aspect*scale,v.y*scale,1.));float cp=cos(pitch),sp=sin(pitch);d=vec3(d.x,d.y*cp+d.z*sp,d.z*cp-d.y*sp);float l=atan(d.x,d.z)+yaw;float b=asin(clamp(d.y,-1.,1.));vec2 uv=vec2(fract(.5+l/(2.*PI)),.5-b/PI);gl_FragColor=texture2D(sky,uv);}';
-function initGL(im){try{if(Math.abs(im.naturalWidth/im.naturalHeight-2)>.025)throw Error('球面模式需要约 2:1 全天图');if(!gl){gl=$('sphere').getContext('webgl',{alpha:false,antialias:false});if(!gl)throw Error('WebGL unavailable');const compile=(type,code)=>{let s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s};program=gl.createProgram();gl.attachShader(program,compile(gl.VERTEX_SHADER,vert));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,frag));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('link');gl.useProgram(program);let b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const p=gl.getAttribLocation(program,'pos');gl.enableVertexAttribArray(p);gl.vertexAttribPointer(p,2,gl.FLOAT,false,0,0)}if(texture)gl.deleteTexture(texture);texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);let source=im,max=gl.getParameter(gl.MAX_TEXTURE_SIZE);if(im.naturalWidth>max||im.naturalHeight>max){source=document.createElement('canvas');source.width=Math.min(max,im.naturalWidth);source.height=Math.round(source.width*im.naturalHeight/im.naturalWidth);source.getContext('2d').drawImage(im,0,0,source.width,source.height)}gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,source);if(gl.getError()!==gl.NO_ERROR)throw Error('texture upload failed');return true}catch(e){return false}}
-function setupSphere(im){cpu=null;if(initGL(im))return true;try{if(Math.abs(im.naturalWidth/im.naturalHeight-2)>.025)return false;const c=document.createElement('canvas');c.width=Math.min(4096,im.naturalWidth);c.height=Math.round(c.width*im.naturalHeight/im.naturalWidth);const cx=c.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0,c.width,c.height);cpu={w:c.width,h:c.height,data:cx.getImageData(0,0,c.width,c.height).data};return true}catch{return false}}
-function drawCpu(w,h){const c=$('sphereCpu'),cx=c.getContext('2d',{alpha:false});const factor=Math.min(1,1000/w,650/h),cw=Math.max(1,Math.round(w*factor)),ch=Math.max(1,Math.round(h*factor));if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}const out=cx.createImageData(cw,ch),d=out.data,scale=Math.tan(fov*Math.PI/360),aspect=w/h,cp=Math.cos(pitch),sp=Math.sin(pitch),src=cpu.data;for(let y=0;y<ch;y++){const dy=(1-2*(y+.5)/ch)*scale;for(let x=0;x<cw;x++){const dx=(2*(x+.5)/cw-1)*scale*aspect,norm=Math.sqrt(dx*dx+dy*dy+1),yy=(dy*cp+sp)/norm,zz=cp-dy*sp,lon=Math.atan2(dx,zz)+yaw,lat=Math.asin(clamp(yy,-1,1)),u=((.5+lon/(2*Math.PI))%1+1)%1,v=clamp(.5-lat/Math.PI,0,.999999),sx=u*cpu.w,sy=v*(cpu.h-1),ix=Math.floor(sx),iy=Math.floor(sy),tx=sx-ix,ty=sy-iy,a=(iy*cpu.w+ix)*4,b=(iy*cpu.w+(ix+1)%cpu.w)*4,cc=(Math.min(cpu.h-1,iy+1)*cpu.w+ix)*4,dd=(Math.min(cpu.h-1,iy+1)*cpu.w+(ix+1)%cpu.w)*4,o=(y*cw+x)*4;for(let k=0;k<3;k++)d[o+k]=(src[a+k]*(1-tx)+src[b+k]*tx)*(1-ty)+(src[cc+k]*(1-tx)+src[dd+k]*tx)*ty;d[o+3]=255}}cx.putImageData(out,0,0)}
-function render(){raf=0;if(!loaded)return;let w=$('viewport').clientWidth,h=$('viewport').clientHeight;if(mode==='flat'){let tw=Math.min(w,h*imgW/imgH)*zoom,th=tw*imgH/imgW;let x=(w-tw)/2-yaw/(2*Math.PI)*tw,y=(h-th)/2+clamp(pitch/Math.PI*th,-Math.max(0,(th-h)/2),Math.max(0,(th-h)/2));$('flat').style.backgroundSize=tw+'px '+th+'px';$('flat').style.backgroundPosition=x+'px '+y+'px';$('flat').style.backgroundRepeat=tw>=w?'repeat-x':'no-repeat'}else if(cpu&&canSphere){drawCpu(w,h)}else if(gl&&canSphere){let c=$('sphere'),d=Math.min(devicePixelRatio||1,1.5);let cw=Math.round(w*d),ch=Math.round(h*d);if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}gl.viewport(0,0,cw,ch);gl.useProgram(program);gl.bindTexture(gl.TEXTURE_2D,texture);for(const [k,v] of Object.entries({aspect:w/h,scale:Math.tan(fov*Math.PI/360),yaw,pitch}))gl.uniform1f(gl.getUniformLocation(program,k),v);gl.drawArrays(gl.TRIANGLES,0,6)} }
-function schedule(){if(!raf)raf=requestAnimationFrame(render)}function updateControls(){for(const id of ['minus','plus','auto'])$(id).disabled=!loaded;$('immersive').disabled=!canSphere;$('full').setAttribute('aria-pressed',String(mode==='flat'));$('immersive').setAttribute('aria-pressed',String(mode==='sphere'));$('auto').setAttribute('aria-pressed',String(auto))}
-function setMode(m){if(m==='sphere'&&!canSphere)return;mode=m;yaw=pitch=0;zoom=1;fov=100;$('flat').hidden=m==='sphere';$('sphere').hidden=m!=='sphere'||!!cpu;$('sphereCpu').hidden=m!=='sphere'||!cpu;updateControls();schedule()}
-function load(source,isLocal){const id=++loadId;loaded=false;canSphere=false;cpu=null;auto=false;cancelAnimationFrame(autoFrame);setMode('flat');$('notice').hidden=false;$('noticeTitle').textContent='正在加载原图';$('noticeText').textContent='等待图像完成加载。';$('status').textContent='加载中';$('flat').style.backgroundImage='none';let display=new Image();display.onload=()=>{if(id!==loadId)return;imgW=display.naturalWidth;imgH=display.naturalHeight;loaded=true;src=source;$('flat').style.backgroundImage='url("'+source+'")';$('notice').hidden=true;$('status').textContent=imgW+' × '+imgH+(source===url?' · 本地 ESO 全景':isLocal?' · 本地文件（来源由用户确认）':' · ESO 官方图像');updateControls();schedule();if(isLocal){canSphere=setupSphere(display);if(cpu)$('status').textContent+=' · Canvas 球面模式';updateControls();return}let tex=new Image();tex.crossOrigin='anonymous';tex.onload=()=>{if(id===loadId){canSphere=setupSphere(tex);if(cpu)$('status').textContent+=' · Canvas 球面模式';updateControls()}};tex.onerror=()=>{if(id===loadId)$('status').textContent+=' · 球面模式不可用'};tex.src=source};display.onerror=()=>{if(id!==loadId)return;$('noticeTitle').textContent='未能加载图像';$('noticeText').textContent='本地图片加载失败，请重新打开页面。';$('status').textContent='图像不可用';updateControls()};display.src=source;setTimeout(()=>{if(id===loadId&&!loaded){$('noticeTitle').textContent='图像加载时间较长';$('noticeText').textContent='请重新打开页面。'}},8000)}
-function zoomBy(f){if(!loaded)return;if(mode==='flat')zoom=clamp(zoom*f,1,12);else fov=clamp(fov/f,25,120);schedule()}$('full').onclick=()=>setMode('flat');$('immersive').onclick=()=>setMode('sphere');$('minus').onclick=()=>zoomBy(1/1.3);$('plus').onclick=()=>zoomBy(1.3);let v=$('viewport');v.onpointerdown=e=>{if(!loaded)return;auto=false;updateControls();drag={x:e.clientX,y:e.clientY};v.setPointerCapture(e.pointerId)};v.onpointermove=e=>{if(!drag)return;let dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag={x:e.clientX,y:e.clientY};if(mode==='sphere'){yaw=wrap(yaw-dx*.003*fov/100);pitch=clamp(pitch+dy*.003*fov/100,-1.53,1.53)}else{let tw=Math.min(v.clientWidth,v.clientHeight*imgW/imgH)*zoom,th=tw*imgH/imgW;yaw=wrap(yaw-dx/tw*2*Math.PI);pitch=clamp(pitch+dy/th*Math.PI,-Math.PI/2,Math.PI/2)}schedule()};v.onpointerup=v.onpointercancel=()=>drag=null;v.addEventListener('wheel',e=>{e.preventDefault();zoomBy(Math.exp(-e.deltaY*.001))},{passive:false});v.onkeydown=e=>{if(!loaded)return;let map={ArrowLeft:[-.08,0],ArrowRight:[.08,0],ArrowUp:[0,.06],ArrowDown:[0,-.06]};if(map[e.key]){e.preventDefault();yaw=wrap(yaw+map[e.key][0]);pitch=clamp(pitch+map[e.key][1],-1.53,1.53);schedule()}else if(e.key==='+'||e.key==='=')zoomBy(1.3);else if(e.key==='-')zoomBy(1/1.3)};function tick(t){autoFrame=0;if(auto&&loaded){yaw=wrap(yaw+Math.min(50,t-last)*.00012);schedule();last=t;autoFrame=requestAnimationFrame(tick)}}$('auto').onclick=()=>{auto=!auto;cancelAnimationFrame(autoFrame);autoFrame=0;updateControls();if(auto){if(mode==='flat'&&zoom===1)zoom=1.5;last=performance.now();autoFrame=requestAnimationFrame(tick)}};new ResizeObserver(schedule).observe(v);$('sphere').addEventListener('webglcontextlost',e=>{e.preventDefault();canSphere=false;setMode('flat');$('status').textContent+=' · WebGL 已降级'});load(url,true);
-</script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>GEO/OS · 银河全景</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --fg: #eef3fa;
+        --muted: #a9b5c6;
+        --line: #ffffff24;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #030407;
+        color: var(--fg);
+        font:
+          14px/1.55 system-ui,
+          -apple-system,
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+      }
+      button,
+      a,
+      input {
+        font: inherit;
+      }
+      button {
+        color: var(--fg);
+        background: #15202cda;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button:hover,
+      button[aria-pressed="true"] {
+        background: #263a4c;
+        border-color: #7aa9c6;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      a {
+        color: #c0def2;
+      }
+      header {
+        position: relative;
+        z-index: 4;
+        background: #080d16f2;
+        border-bottom: 1px solid var(--line);
+        padding: 14px 22px 10px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 10px;
+      }
+      .brand strong {
+        letter-spacing: 0.12em;
+        font-size: 23px;
+      }
+      .brand small {
+        color: var(--muted);
+        letter-spacing: 0.08em;
+      }
+      .brand .right {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      nav {
+        display: flex;
+        gap: 5px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+      }
+      nav button {
+        white-space: nowrap;
+        border-color: transparent;
+        background: none;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      nav button[aria-pressed="true"] {
+        background: #1b2a38;
+        border-color: #7aa9c660;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        min-height: 0;
+      }
+      main {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+      #viewport {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        touch-action: none;
+        cursor: grab;
+        background: #020306;
+      }
+      #viewport:active {
+        cursor: grabbing;
+      }
+      #flat {
+        position: absolute;
+        inset: 0;
+        background-repeat: repeat-x;
+        background-position: center;
+        background-color: #020306;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        inset: 0;
+      }
+      #notice {
+        position: absolute;
+        top: 46%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 90%;
+        width: 480px;
+        text-align: center;
+        padding: 20px;
+        background: #0a111bdc;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        z-index: 2;
+      }
+      #notice p {
+        color: var(--muted);
+      }
+      .intro {
+        position: absolute;
+        top: 22px;
+        left: 22px;
+        pointer-events: none;
+        text-shadow:
+          0 2px 7px #000,
+          0 0 16px #000;
+      }
+      .intro small {
+        letter-spacing: 0.17em;
+        font-size: 11px;
+        color: #aebaca;
+      }
+      .intro h1 {
+        font-size: 26px;
+        margin: 4px 0 0;
+        font-weight: 600;
+      }
+      .intro p {
+        margin: 4px 0;
+        color: #c5d0de;
+        font-size: 12px;
+      }
+      .controls {
+        position: absolute;
+        bottom: 52px;
+        left: 22px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        z-index: 3;
+        max-width: calc(100% - 44px);
+      }
+      .controls button {
+        font-size: 12px;
+        backdrop-filter: blur(10px);
+      }
+      footer {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #050910eb;
+        border-top: 1px solid var(--line);
+        padding: 9px 22px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        font-size: 11px;
+        z-index: 4;
+      }
+      footer span {
+        color: var(--muted);
+      }
+      footer a {
+        white-space: nowrap;
+      }
+      #status {
+        margin-left: auto;
+      }
+      #panel {
+        position: absolute;
+        top: 18px;
+        right: 20px;
+        width: min(375px, calc(100% - 40px));
+        background: #0b1422f5;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px;
+        z-index: 5;
+        box-shadow: 0 10px 40px #0008;
+      }
+      #panel h2 {
+        font-size: 20px;
+        margin: 2px 0 12px;
+      }
+      #panel p {
+        color: #b8c7d5;
+      }
+      #panel ol {
+        padding-left: 20px;
+      }
+      #panel li {
+        padding: 6px 0;
+        border-bottom: 1px solid #ffffff12;
+      }
+      #close {
+        float: right;
+        padding: 4px 10px;
+      }
+      #file {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 650px) {
+        header {
+          padding: 9px 12px 6px;
+        }
+        .brand small,
+        .brand .right {
+          display: none;
+        }
+        .brand {
+          margin-bottom: 6px;
+        }
+        main {
+          min-height: 0;
+        }
+        .intro {
+          top: 15px;
+          left: 14px;
+        }
+        .intro h1 {
+          font-size: 21px;
+        }
+        .controls {
+          bottom: 83px;
+          left: 12px;
+          max-width: calc(100% - 24px);
+        }
+        footer {
+          padding: 8px 12px;
+          gap: 6px;
+        }
+        #status {
+          margin-left: 0;
+          width: 100%;
+        }
+        #panel {
+          right: 12px;
+          width: calc(100% - 24px);
+        }
+      }
+      nav a {
+        white-space: nowrap;
+        color: var(--fg);
+        text-decoration: none;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      nav a:hover,
+      nav a:focus-visible {
+        background: #263a4c;
+        border-color: #7aa9c6;
+      }
+      .brand .right {
+        font-size: 12px;
+      }
+      #notice a {
+        color: #c0def2;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <strong>GEO/OS</strong><small>GENERATIVE ENGINE OPTIMIZATION</small
+        ><span class="right">企业品牌认知工作台</span>
+      </div>
+      <nav id="nav" aria-label="业务导航"></nav>
+    </header>
+    <main>
+      <div id="viewport" tabindex="0" aria-label="银河全景，方向键环视，滚轮缩放">
+        <div id="flat"></div>
+        <canvas id="sphere" hidden></canvas><canvas id="sphereCpu" hidden></canvas>
+      </div>
+      <div id="notice" role="status">
+        <strong id="noticeTitle">正在加载</strong>
+        <p id="noticeText">正在读取本地资源。</p>
+        <a href="https://cdn.eso.org/images/large/eso0932a.jpg" target="_blank" rel="noopener"
+          >ESO 官方图像</a
+        >　
+      </div>
+      <div class="controls">
+        <button id="full" aria-pressed="true">全天原图</button
+        ><button id="immersive" aria-pressed="false" disabled>沉浸环视</button
+        ><button id="minus" disabled>−</button><button id="plus" disabled>＋</button
+        ><button id="auto" aria-pressed="false" disabled>自动漫游</button>
+      </div>
+      <footer>
+        <a href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener"
+          >ESO/S. Brunier</a
+        ><a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener"
+          >CC BY 4.0</a
+        ><span id="status" hidden aria-live="polite">等待图像</span>
+      </footer>
+    </main>
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const url = "/assets/eso0932a.jpg";
+      const modules = [
+        ["dashboard", "GEO 指挥舱"],
+        ["knowledge", "01 知识底座"],
+        ["monitor", "02 AI 监测"],
+        ["risk", "03 回答复核"],
+        ["insights", "04 机会洞察"],
+        ["site", "05 官网诊断"],
+        ["content", "06 优化行动"],
+        ["distribution", "07 内容分发"],
+        ["roi", "08 效果复盘"],
+        ["automation", "自动化运营"],
+        ["setup", "企业与权限"],
+      ];
+      for (const [view, label] of modules) {
+        const a = document.createElement("a");
+        a.textContent = label;
+        a.href = "/workbench?view=" + encodeURIComponent(view);
+        $("nav").append(a);
+      }
+      let loaded = false,
+        mode = "flat",
+        zoom = 1,
+        yaw = 0,
+        pitch = 0,
+        fov = 100,
+        auto = false,
+        drag = null,
+        raf = 0,
+        last = 0,
+        src = url,
+        localURL = null,
+        loadId = 0,
+        imgW = 2048,
+        imgH = 1024,
+        gl = null,
+        program = null,
+        texture = null,
+        canSphere = false,
+        cpu = null,
+        autoFrame = 0;
+      const clamp = (x, a, b) => Math.max(a, Math.min(b, x)),
+        wrap = (a) => ((((a + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) - Math.PI;
+      const vert =
+        "attribute vec2 pos;varying vec2 v;void main(){v=pos;gl_Position=vec4(pos,0.,1.);}";
+      const frag =
+        "precision highp float;varying vec2 v;uniform sampler2D sky;uniform float aspect,scale,yaw,pitch;const float PI=3.141592653589793;void main(){vec3 d=normalize(vec3(v.x*aspect*scale,v.y*scale,1.));float cp=cos(pitch),sp=sin(pitch);d=vec3(d.x,d.y*cp+d.z*sp,d.z*cp-d.y*sp);float l=atan(d.x,d.z)+yaw;float b=asin(clamp(d.y,-1.,1.));vec2 uv=vec2(fract(.5+l/(2.*PI)),.5-b/PI);gl_FragColor=texture2D(sky,uv);}";
+      function initGL(im) {
+        try {
+          if (Math.abs(im.naturalWidth / im.naturalHeight - 2) > 0.025)
+            throw Error("球面模式需要约 2:1 全天图");
+          if (!gl) {
+            gl = $("sphere").getContext("webgl", { alpha: false, antialias: false });
+            if (!gl) throw Error("WebGL unavailable");
+            const compile = (type, code) => {
+              let s = gl.createShader(type);
+              gl.shaderSource(s, code);
+              gl.compileShader(s);
+              if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(s));
+              return s;
+            };
+            program = gl.createProgram();
+            gl.attachShader(program, compile(gl.VERTEX_SHADER, vert));
+            gl.attachShader(program, compile(gl.FRAGMENT_SHADER, frag));
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw Error("link");
+            gl.useProgram(program);
+            let b = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, b);
+            gl.bufferData(
+              gl.ARRAY_BUFFER,
+              new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+              gl.STATIC_DRAW,
+            );
+            const p = gl.getAttribLocation(program, "pos");
+            gl.enableVertexAttribArray(p);
+            gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
+          }
+          if (texture) gl.deleteTexture(texture);
+          texture = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          let source = im,
+            max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+          if (im.naturalWidth > max || im.naturalHeight > max) {
+            source = document.createElement("canvas");
+            source.width = Math.min(max, im.naturalWidth);
+            source.height = Math.round((source.width * im.naturalHeight) / im.naturalWidth);
+            source.getContext("2d").drawImage(im, 0, 0, source.width, source.height);
+          }
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, source);
+          if (gl.getError() !== gl.NO_ERROR) throw Error("texture upload failed");
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+      function setupSphere(im) {
+        cpu = null;
+        if (initGL(im)) return true;
+        try {
+          if (Math.abs(im.naturalWidth / im.naturalHeight - 2) > 0.025) return false;
+          const c = document.createElement("canvas");
+          c.width = Math.min(4096, im.naturalWidth);
+          c.height = Math.round((c.width * im.naturalHeight) / im.naturalWidth);
+          const cx = c.getContext("2d", { willReadFrequently: true });
+          cx.drawImage(im, 0, 0, c.width, c.height);
+          cpu = { w: c.width, h: c.height, data: cx.getImageData(0, 0, c.width, c.height).data };
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      function drawCpu(w, h) {
+        const c = $("sphereCpu"),
+          cx = c.getContext("2d", { alpha: false });
+        const factor = Math.min(1, 1000 / w, 650 / h),
+          cw = Math.max(1, Math.round(w * factor)),
+          ch = Math.max(1, Math.round(h * factor));
+        if (c.width !== cw || c.height !== ch) {
+          c.width = cw;
+          c.height = ch;
+        }
+        const out = cx.createImageData(cw, ch),
+          d = out.data,
+          scale = Math.tan((fov * Math.PI) / 360),
+          aspect = w / h,
+          cp = Math.cos(pitch),
+          sp = Math.sin(pitch),
+          src = cpu.data;
+        for (let y = 0; y < ch; y++) {
+          const dy = (1 - (2 * (y + 0.5)) / ch) * scale;
+          for (let x = 0; x < cw; x++) {
+            const dx = ((2 * (x + 0.5)) / cw - 1) * scale * aspect,
+              norm = Math.sqrt(dx * dx + dy * dy + 1),
+              yy = (dy * cp + sp) / norm,
+              zz = cp - dy * sp,
+              lon = Math.atan2(dx, zz) + yaw,
+              lat = Math.asin(clamp(yy, -1, 1)),
+              u = (((0.5 + lon / (2 * Math.PI)) % 1) + 1) % 1,
+              v = clamp(0.5 - lat / Math.PI, 0, 0.999999),
+              sx = u * cpu.w,
+              sy = v * (cpu.h - 1),
+              ix = Math.floor(sx),
+              iy = Math.floor(sy),
+              tx = sx - ix,
+              ty = sy - iy,
+              a = (iy * cpu.w + ix) * 4,
+              b = (iy * cpu.w + ((ix + 1) % cpu.w)) * 4,
+              cc = (Math.min(cpu.h - 1, iy + 1) * cpu.w + ix) * 4,
+              dd = (Math.min(cpu.h - 1, iy + 1) * cpu.w + ((ix + 1) % cpu.w)) * 4,
+              o = (y * cw + x) * 4;
+            for (let k = 0; k < 3; k++)
+              d[o + k] =
+                (src[a + k] * (1 - tx) + src[b + k] * tx) * (1 - ty) +
+                (src[cc + k] * (1 - tx) + src[dd + k] * tx) * ty;
+            d[o + 3] = 255;
+          }
+        }
+        cx.putImageData(out, 0, 0);
+      }
+      function render() {
+        raf = 0;
+        if (!loaded) return;
+        let w = $("viewport").clientWidth,
+          h = $("viewport").clientHeight;
+        if (mode === "flat") {
+          let tw = Math.min(w, (h * imgW) / imgH) * zoom,
+            th = (tw * imgH) / imgW;
+          let x = (w - tw) / 2 - (yaw / (2 * Math.PI)) * tw,
+            y =
+              (h - th) / 2 +
+              clamp((pitch / Math.PI) * th, -Math.max(0, (th - h) / 2), Math.max(0, (th - h) / 2));
+          $("flat").style.backgroundSize = tw + "px " + th + "px";
+          $("flat").style.backgroundPosition = x + "px " + y + "px";
+          $("flat").style.backgroundRepeat = tw >= w ? "repeat-x" : "no-repeat";
+        } else if (cpu && canSphere) {
+          drawCpu(w, h);
+        } else if (gl && canSphere) {
+          let c = $("sphere"),
+            d = Math.min(devicePixelRatio || 1, 1.5);
+          let cw = Math.round(w * d),
+            ch = Math.round(h * d);
+          if (c.width !== cw || c.height !== ch) {
+            c.width = cw;
+            c.height = ch;
+          }
+          gl.viewport(0, 0, cw, ch);
+          gl.useProgram(program);
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          for (const [k, v] of Object.entries({
+            aspect: w / h,
+            scale: Math.tan((fov * Math.PI) / 360),
+            yaw,
+            pitch,
+          }))
+            gl.uniform1f(gl.getUniformLocation(program, k), v);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+      }
+      function schedule() {
+        if (!raf) raf = requestAnimationFrame(render);
+      }
+      function updateControls() {
+        for (const id of ["minus", "plus", "auto"]) $(id).disabled = !loaded;
+        $("immersive").disabled = !canSphere;
+        $("full").setAttribute("aria-pressed", String(mode === "flat"));
+        $("immersive").setAttribute("aria-pressed", String(mode === "sphere"));
+        $("auto").setAttribute("aria-pressed", String(auto));
+      }
+      function setMode(m) {
+        if (m === "sphere" && !canSphere) return;
+        mode = m;
+        yaw = pitch = 0;
+        zoom = 1;
+        fov = 100;
+        $("flat").hidden = m === "sphere";
+        $("sphere").hidden = m !== "sphere" || !!cpu;
+        $("sphereCpu").hidden = m !== "sphere" || !cpu;
+        updateControls();
+        schedule();
+      }
+      function load(source, isLocal) {
+        const id = ++loadId;
+        loaded = false;
+        canSphere = false;
+        cpu = null;
+        auto = false;
+        cancelAnimationFrame(autoFrame);
+        setMode("flat");
+        $("notice").hidden = false;
+        $("noticeTitle").textContent = "正在加载原图";
+        $("noticeText").textContent = "等待图像完成加载。";
+        $("status").textContent = "加载中";
+        $("flat").style.backgroundImage = "none";
+        let display = new Image();
+        display.onload = () => {
+          if (id !== loadId) return;
+          imgW = display.naturalWidth;
+          imgH = display.naturalHeight;
+          loaded = true;
+          src = source;
+          $("flat").style.backgroundImage = 'url("' + source + '")';
+          $("notice").hidden = true;
+          $("status").textContent =
+            imgW +
+            " × " +
+            imgH +
+            (source === url
+              ? " · 本地 ESO 全景"
+              : isLocal
+                ? " · 本地文件（来源由用户确认）"
+                : " · ESO 官方图像");
+          updateControls();
+          schedule();
+          if (isLocal) {
+            canSphere = setupSphere(display);
+            if (cpu) $("status").textContent += " · Canvas 球面模式";
+            updateControls();
+            return;
+          }
+          let tex = new Image();
+          tex.crossOrigin = "anonymous";
+          tex.onload = () => {
+            if (id === loadId) {
+              canSphere = setupSphere(tex);
+              if (cpu) $("status").textContent += " · Canvas 球面模式";
+              updateControls();
+            }
+          };
+          tex.onerror = () => {
+            if (id === loadId) $("status").textContent += " · 球面模式不可用";
+          };
+          tex.src = source;
+        };
+        display.onerror = () => {
+          if (id !== loadId) return;
+          $("noticeTitle").textContent = "未能加载图像";
+          $("noticeText").textContent = "本地图片加载失败，请重新打开页面。";
+          $("status").textContent = "图像不可用";
+          updateControls();
+        };
+        display.src = source;
+        setTimeout(() => {
+          if (id === loadId && !loaded) {
+            $("noticeTitle").textContent = "图像加载时间较长";
+            $("noticeText").textContent = "请重新打开页面。";
+          }
+        }, 8000);
+      }
+      function zoomBy(f) {
+        if (!loaded) return;
+        if (mode === "flat") zoom = clamp(zoom * f, 1, 12);
+        else fov = clamp(fov / f, 25, 120);
+        schedule();
+      }
+      $("full").onclick = () => setMode("flat");
+      $("immersive").onclick = () => setMode("sphere");
+      $("minus").onclick = () => zoomBy(1 / 1.3);
+      $("plus").onclick = () => zoomBy(1.3);
+      let v = $("viewport");
+      v.onpointerdown = (e) => {
+        if (!loaded) return;
+        auto = false;
+        updateControls();
+        drag = { x: e.clientX, y: e.clientY };
+        v.setPointerCapture(e.pointerId);
+      };
+      v.onpointermove = (e) => {
+        if (!drag) return;
+        let dx = e.clientX - drag.x,
+          dy = e.clientY - drag.y;
+        drag = { x: e.clientX, y: e.clientY };
+        if (mode === "sphere") {
+          yaw = wrap(yaw - (dx * 0.003 * fov) / 100);
+          pitch = clamp(pitch + (dy * 0.003 * fov) / 100, -1.53, 1.53);
+        } else {
+          let tw = Math.min(v.clientWidth, (v.clientHeight * imgW) / imgH) * zoom,
+            th = (tw * imgH) / imgW;
+          yaw = wrap(yaw - (dx / tw) * 2 * Math.PI);
+          pitch = clamp(pitch + (dy / th) * Math.PI, -Math.PI / 2, Math.PI / 2);
+        }
+        schedule();
+      };
+      v.onpointerup = v.onpointercancel = () => (drag = null);
+      v.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          zoomBy(Math.exp(-e.deltaY * 0.001));
+        },
+        { passive: false },
+      );
+      v.onkeydown = (e) => {
+        if (!loaded) return;
+        let map = {
+          ArrowLeft: [-0.08, 0],
+          ArrowRight: [0.08, 0],
+          ArrowUp: [0, 0.06],
+          ArrowDown: [0, -0.06],
+        };
+        if (map[e.key]) {
+          e.preventDefault();
+          yaw = wrap(yaw + map[e.key][0]);
+          pitch = clamp(pitch + map[e.key][1], -1.53, 1.53);
+          schedule();
+        } else if (e.key === "+" || e.key === "=") zoomBy(1.3);
+        else if (e.key === "-") zoomBy(1 / 1.3);
+      };
+      function tick(t) {
+        autoFrame = 0;
+        if (auto && loaded) {
+          yaw = wrap(yaw + Math.min(50, t - last) * 0.00012);
+          schedule();
+          last = t;
+          autoFrame = requestAnimationFrame(tick);
+        }
+      }
+      $("auto").onclick = () => {
+        auto = !auto;
+        cancelAnimationFrame(autoFrame);
+        autoFrame = 0;
+        updateControls();
+        if (auto) {
+          if (mode === "flat" && zoom === 1) zoom = 1.5;
+          last = performance.now();
+          autoFrame = requestAnimationFrame(tick);
+        }
+      };
+      new ResizeObserver(schedule).observe(v);
+      $("sphere").addEventListener("webglcontextlost", (e) => {
+        e.preventDefault();
+        canSphere = false;
+        setMode("flat");
+        $("status").textContent += " · WebGL 已降级";
+      });
+      load(url, true);
+    </script>
+  </body>
+</html>

@@ -1,13 +1,118 @@
-import {createInterface} from "node:readline";
-import {pathToFileURL} from "node:url";
-const names={geo_workspaces:"workspaces",geo_metrics:"metrics",geo_opportunities:"analysis",geo_public_facts:"public-facts",geo_site_audits:"site-audits",geo_site_tasks:"site-tasks",geo_publications:"distribution",geo_daily_strategy:"planner"};
-export const tools=Object.keys(names).map(name=>({name,description:"Read GEO/OS "+names[name]+" with local account permissions.",inputSchema:name==="geo_workspaces"?{type:"object",properties:{},additionalProperties:false}:{type:"object",properties:{workspaceId:{type:"string",pattern:"^[a-f0-9-]{36}$"}},required:["workspaceId"],additionalProperties:false}}));
-export function createMcp({request=fetch,env=process.env}={}){
- const port=Number(env.GEO_PORT||3100);if(!Number.isInteger(port)||port<1024||port>65535)throw Error("Invalid local port");const base="http://127.0.0.1:"+port;let cookie="",initialized=false;
- async function login(){if(!env.GEO_MCP_USER||!env.GEO_MCP_PASSWORD)throw Error("Set dedicated MCP credentials");const r=await request(base+"/api/login",{method:"POST",headers:{origin:base,"content-type":"application/json"},body:JSON.stringify({username:env.GEO_MCP_USER,password:env.GEO_MCP_PASSWORD}),redirect:"error",signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error("GEO login failed");cookie=r.headers.get("set-cookie")?.split(";")[0]||"";if(!cookie)throw Error("Missing session")}
- async function get(path){if(!cookie)await login();let r=await request(base+"/api/"+path,{headers:{cookie},redirect:"error",signal:AbortSignal.timeout(10000)});if(r.status===401){cookie="";await login();r=await request(base+"/api/"+path,{headers:{cookie},redirect:"error",signal:AbortSignal.timeout(10000)})}if(!r.ok)throw Error("GEO request denied or unavailable");return r.json()}
- return async msg=>{const id=msg?.id,ok=result=>({jsonrpc:"2.0",id,result}),err=(code,message)=>({jsonrpc:"2.0",id:id??null,error:{code,message}});if(msg?.jsonrpc!=="2.0"||typeof msg.method!=="string")return err(-32600,"Invalid request");if(!Object.hasOwn(msg,"id"))return null;
- if(msg.method==="initialize"){initialized=true;return ok({protocolVersion:"2025-11-25",capabilities:{tools:{}},serverInfo:{name:"geoos",version:"0.1.0"}})}
- if(msg.method==="ping")return ok({});if(!initialized)return err(-32000,"Initialize first");if(msg.method==="tools/list")return ok({tools});if(msg.method!=="tools/call")return err(-32601,"Method not found");const n=msg.params?.name,args=msg.params?.arguments??{};if(!Object.hasOwn(names,n)||!args||typeof args!=="object"||Array.isArray(args))return err(-32602,"Invalid tool");try{let data;if(n==="geo_workspaces"){if(Object.keys(args).length)throw Error("No arguments expected");const d=await get("workspaces");data=d.workspaces.map(({id,name,brand,role})=>({id,name,brand,role}))}else{if(Object.keys(args).length!==1||!(/^[a-f0-9-]{36}$/.test(args.workspaceId||"")))throw Error("Workspace ID required");data=await get("workspaces/"+args.workspaceId+"/"+names[n])}const text=JSON.stringify(data);if(text.length>100000)throw Error("Response too large");return ok({content:[{type:"text",text}]})}catch(e){return ok({isError:true,content:[{type:"text",text:e.message}]})}}
+import { createInterface } from "node:readline";
+import { pathToFileURL } from "node:url";
+const names = {
+  geo_workspaces: "workspaces",
+  geo_metrics: "metrics",
+  geo_opportunities: "analysis",
+  geo_public_facts: "public-facts",
+  geo_site_audits: "site-audits",
+  geo_site_tasks: "site-tasks",
+  geo_publications: "distribution",
+  geo_daily_strategy: "planner",
+};
+export const tools = Object.keys(names).map((name) => ({
+  name,
+  description: "Read GEO/OS " + names[name] + " with local account permissions.",
+  inputSchema:
+    name === "geo_workspaces"
+      ? { type: "object", properties: {}, additionalProperties: false }
+      : {
+          type: "object",
+          properties: { workspaceId: { type: "string", pattern: "^[a-f0-9-]{36}$" } },
+          required: ["workspaceId"],
+          additionalProperties: false,
+        },
+}));
+export function createMcp({ request = fetch, env = process.env } = {}) {
+  const port = Number(env.GEO_PORT || 3100);
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error("Invalid local port");
+  const base = "http://127.0.0.1:" + port;
+  let cookie = "",
+    initialized = false;
+  async function login() {
+    if (!env.GEO_MCP_USER || !env.GEO_MCP_PASSWORD) throw Error("Set dedicated MCP credentials");
+    const r = await request(base + "/api/login", {
+      method: "POST",
+      headers: { origin: base, "content-type": "application/json" },
+      body: JSON.stringify({ username: env.GEO_MCP_USER, password: env.GEO_MCP_PASSWORD }),
+      redirect: "error",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) throw Error("GEO login failed");
+    cookie = r.headers.get("set-cookie")?.split(";")[0] || "";
+    if (!cookie) throw Error("Missing session");
+  }
+  async function get(path) {
+    if (!cookie) await login();
+    let r = await request(base + "/api/" + path, {
+      headers: { cookie },
+      redirect: "error",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (r.status === 401) {
+      cookie = "";
+      await login();
+      r = await request(base + "/api/" + path, {
+        headers: { cookie },
+        redirect: "error",
+        signal: AbortSignal.timeout(10000),
+      });
+    }
+    if (!r.ok) throw Error("GEO request denied or unavailable");
+    return r.json();
+  }
+  return async (msg) => {
+    const id = msg?.id,
+      ok = (result) => ({ jsonrpc: "2.0", id, result }),
+      err = (code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+    if (msg?.jsonrpc !== "2.0" || typeof msg.method !== "string")
+      return err(-32600, "Invalid request");
+    if (!Object.hasOwn(msg, "id")) return null;
+    if (msg.method === "initialize") {
+      initialized = true;
+      return ok({
+        protocolVersion: "2025-11-25",
+        capabilities: { tools: {} },
+        serverInfo: { name: "geoos", version: "0.1.0" },
+      });
+    }
+    if (msg.method === "ping") return ok({});
+    if (!initialized) return err(-32000, "Initialize first");
+    if (msg.method === "tools/list") return ok({ tools });
+    if (msg.method !== "tools/call") return err(-32601, "Method not found");
+    const n = msg.params?.name,
+      args = msg.params?.arguments ?? {};
+    if (!Object.hasOwn(names, n) || !args || typeof args !== "object" || Array.isArray(args))
+      return err(-32602, "Invalid tool");
+    try {
+      let data;
+      if (n === "geo_workspaces") {
+        if (Object.keys(args).length) throw Error("No arguments expected");
+        const d = await get("workspaces");
+        data = d.workspaces.map(({ id, name, brand, role }) => ({ id, name, brand, role }));
+      } else {
+        if (Object.keys(args).length !== 1 || !/^[a-f0-9-]{36}$/.test(args.workspaceId || ""))
+          throw Error("Workspace ID required");
+        data = await get("workspaces/" + args.workspaceId + "/" + names[n]);
+      }
+      const text = JSON.stringify(data);
+      if (text.length > 100000) throw Error("Response too large");
+      return ok({ content: [{ type: "text", text }] });
+    } catch (e) {
+      return ok({ isError: true, content: [{ type: "text", text: e.message }] });
+    }
+  };
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){const handler=createMcp(),lines=createInterface({input:process.stdin,crlfDelay:Infinity});for await(const line of lines){let r;try{r=await handler(JSON.parse(line))}catch{r={jsonrpc:"2.0",id:null,error:{code:-32700,message:"Invalid JSON or request"}}}if(r)process.stdout.write(JSON.stringify(r)+"\n")}}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const handler = createMcp(),
+    lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+  for await (const line of lines) {
+    let r;
+    try {
+      r = await handler(JSON.parse(line));
+    } catch {
+      r = { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON or request" } };
+    }
+    if (r) process.stdout.write(JSON.stringify(r) + "\n");
+  }
+}

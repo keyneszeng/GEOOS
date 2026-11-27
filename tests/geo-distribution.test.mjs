@@ -1,26 +1,356 @@
-import {test} from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
-import {openStore} from "../geo/store.mjs";
-import {openAuth,canWrite} from "../geo/auth.mjs";
-import {openKnowledge} from "../geo/knowledge.mjs";
-import {openActions} from "../geo/actions.mjs";
-import {openDistribution} from "../geo/distribution.mjs";
-const day=86400000;
-function fixture(){const s=openStore(":memory:"),auth=openAuth(s,{bootstrapUser:"admin",bootstrapPassword:"test-password-12345"}),token=auth.login({username:"admin",password:"test-password-12345"}),u=auth.authenticate({headers:{cookie:"geo_session="+token}}),w=auth.createWorkspace(u.id,{name:"A",brand:"Acme",competitors:["Beta"]}),other=auth.createWorkspace(u.id,{name:"B",brand:"Other"}),p=s.addPrompt(w.id,{question:"Which tool?"}),k=openKnowledge(s),a=openActions(s,k);for(let i=0;i<10;i++){const j=s.reserve(w.id,p.id,"deepseek",100);s.finish(j.id,w,{answer:"Beta",model:"test",citations:[],sources:[],usage:null,raw:{}})}a.discover(w.id);const action=a.list(w.id)[0],e=k.addEvidence(w.id,{title:"Spec",url:"https://example.com/",excerpt:"Acme CSV",visibility:"public"}),f=k.propose(w.id,{subject:"Acme",predicate:"Export",value:"CSV",evidenceId:e.id});k.review(w.id,{id:f.id,decision:"approved",note:"checked"});a.draft(w.id,{id:action.id,factIds:[f.id],outline:"CSV"});a.transition(w.id,{id:action.id,state:"approved",note:"checked"});const t=Date.now(),d=openDistribution(s,k,{clock:()=>t}),c=d.channel(w.id,{platform:"website",account:"Official"}),input={actionId:action.id,channelId:c.id,title:"Export",body:"CSV support",scheduledAt:new Date(t+day).toISOString()};return {s,u,w,other,k,a,f,action,d,c,input,t}}
-function published(x){const p=x.d.create(x.w.id,x.u.id,x.input);x.d.change(x.w.id,x.u.id,{action:"approve",id:p.id,note:"checked"});return x.d.change(x.w.id,x.u.id,{action:"publish",id:p.id,note:"manual",confirm:true,url:"https://example.com/post",publishedAt:new Date(x.t-8*day).toISOString()})}
-test("approved action, channel isolation, duplicate guard, separate channel approval",()=>{const x=fixture();try{assert.throws(()=>x.d.create(x.other.id,x.u.id,x.input));const p=x.d.create(x.w.id,x.u.id,x.input);assert.equal(p.state,"draft");assert.throws(()=>x.d.create(x.w.id,x.u.id,x.input));assert.throws(()=>x.d.change(x.w.id,x.u.id,{action:"publish",id:p.id,note:"x",confirm:true}));assert.equal(x.d.list(x.other.id).publications.length,0);assert.throws(()=>x.d.history(x.other.id,p.id));assert.equal(canWrite("editor","distribution","approve"),false);assert.equal(canWrite("reviewer","distribution","publish"),false);assert.equal(canWrite("viewer","distribution","metric"),false)}finally{x.s.db.close()}});
-test("superseded facts block distribution; rejected draft can be revised",()=>{const x=fixture();try{const p=x.d.create(x.w.id,x.u.id,x.input);x.d.change(x.w.id,x.u.id,{action:"reject",id:p.id,note:"revise"});assert.equal(x.d.change(x.w.id,x.u.id,{...x.input,action:"revise",id:p.id,note:"fixed"}).state,"draft");x.s.db.prepare("UPDATE geo_fact_versions SET status='superseded' WHERE id=?").run(x.f.id);assert.throws(()=>x.d.change(x.w.id,x.u.id,{action:"approve",id:p.id,note:"checked"}))}finally{x.s.db.close()}});
-test("publication records manual confirmation and safe URL; no scheduled auto-publish",()=>{const x=fixture();try{const p=x.d.create(x.w.id,x.u.id,x.input);x.d.change(x.w.id,x.u.id,{action:"approve",id:p.id,note:"checked"});const req={action:"publish",id:p.id,note:"manual",confirm:true,publishedAt:new Date(x.t).toISOString(),url:"javascript:alert(1)"};assert.throws(()=>x.d.change(x.w.id,x.u.id,req));assert.throws(()=>x.d.change(x.w.id,x.u.id,{...req,url:"https://example.com/post",confirm:false}));assert.equal(x.d.change(x.w.id,x.u.id,{...req,url:"https://example.com/post"}).state,"published");assert.equal(x.d.history(x.w.id,p.id).events.length,3)}finally{x.s.db.close()}});
-test("same elapsed-day review, missing values preserved, currency and duplicates",()=>{const x=fixture();try{const p=published(x),at=new Date(x.t-7*day+1000).toISOString(),input={id:p.id,observedAt:at,source:"Official dashboard, cumulative",metrics:{views:100,likes:4,comments:2,shares:1,favorites:3,visits:20,registrations:2,revenueMinor:1000,refundMinor:200},currency:"CNY"};x.d.metric(x.w.id,x.u.id,input);assert.throws(()=>x.d.metric(x.w.id,x.u.id,input));assert.throws(()=>x.d.metric(x.other.id,x.u.id,input));assert.throws(()=>x.d.metric(x.w.id,x.u.id,{...input,observedAt:new Date(x.t+day).toISOString()}));const r=x.d.review(x.w.id,1)[0];assert.equal(r.engagementRate,.1);assert.equal(r.registrationPerVisit,.1);assert.equal(r.netRevenueMinor,800);assert.equal(r.metrics.orders,null);assert.equal(x.d.review(x.w.id,3)[0].metrics,null);assert.equal(x.d.review(x.other.id,1).length,0)}finally{x.s.db.close()}});
+import { openStore } from "../geo/store.mjs";
+import { openAuth, canWrite } from "../geo/auth.mjs";
+import { openKnowledge } from "../geo/knowledge.mjs";
+import { openActions } from "../geo/actions.mjs";
+import { openDistribution } from "../geo/distribution.mjs";
+const day = 86400000;
+function fixture() {
+  const s = openStore(":memory:"),
+    auth = openAuth(s, { bootstrapUser: "admin", bootstrapPassword: "test-password-12345" }),
+    token = auth.login({ username: "admin", password: "test-password-12345" }),
+    u = auth.authenticate({ headers: { cookie: "geo_session=" + token } }),
+    w = auth.createWorkspace(u.id, { name: "A", brand: "Acme", competitors: ["Beta"] }),
+    other = auth.createWorkspace(u.id, { name: "B", brand: "Other" }),
+    p = s.addPrompt(w.id, { question: "Which tool?" }),
+    k = openKnowledge(s),
+    a = openActions(s, k);
+  for (let i = 0; i < 10; i++) {
+    const j = s.reserve(w.id, p.id, "deepseek", 100);
+    s.finish(j.id, w, {
+      answer: "Beta",
+      model: "test",
+      citations: [],
+      sources: [],
+      usage: null,
+      raw: {},
+    });
+  }
+  a.discover(w.id);
+  const action = a.list(w.id)[0],
+    e = k.addEvidence(w.id, {
+      title: "Spec",
+      url: "https://example.com/",
+      excerpt: "Acme CSV",
+      visibility: "public",
+    }),
+    f = k.propose(w.id, { subject: "Acme", predicate: "Export", value: "CSV", evidenceId: e.id });
+  k.review(w.id, { id: f.id, decision: "approved", note: "checked" });
+  a.draft(w.id, { id: action.id, factIds: [f.id], outline: "CSV" });
+  a.transition(w.id, { id: action.id, state: "approved", note: "checked" });
+  const t = Date.now(),
+    d = openDistribution(s, k, { clock: () => t }),
+    c = d.channel(w.id, { platform: "website", account: "Official" }),
+    input = {
+      actionId: action.id,
+      channelId: c.id,
+      title: "Export",
+      body: "CSV support",
+      scheduledAt: new Date(t + day).toISOString(),
+    };
+  return { s, u, w, other, k, a, f, action, d, c, input, t };
+}
+function published(x) {
+  const p = x.d.create(x.w.id, x.u.id, x.input);
+  x.d.change(x.w.id, x.u.id, { action: "approve", id: p.id, note: "checked" });
+  return x.d.change(x.w.id, x.u.id, {
+    action: "publish",
+    id: p.id,
+    note: "manual",
+    confirm: true,
+    url: "https://example.com/post",
+    publishedAt: new Date(x.t - 8 * day).toISOString(),
+  });
+}
+test("approved action, channel isolation, duplicate guard, separate channel approval", () => {
+  const x = fixture();
+  try {
+    assert.throws(() => x.d.create(x.other.id, x.u.id, x.input));
+    const p = x.d.create(x.w.id, x.u.id, x.input);
+    assert.equal(p.state, "draft");
+    assert.throws(() => x.d.create(x.w.id, x.u.id, x.input));
+    assert.throws(() =>
+      x.d.change(x.w.id, x.u.id, { action: "publish", id: p.id, note: "x", confirm: true }),
+    );
+    assert.equal(x.d.list(x.other.id).publications.length, 0);
+    assert.throws(() => x.d.history(x.other.id, p.id));
+    assert.equal(canWrite("editor", "distribution", "approve"), false);
+    assert.equal(canWrite("reviewer", "distribution", "publish"), false);
+    assert.equal(canWrite("viewer", "distribution", "metric"), false);
+  } finally {
+    x.s.db.close();
+  }
+});
+test("superseded facts block distribution; rejected draft can be revised", () => {
+  const x = fixture();
+  try {
+    const p = x.d.create(x.w.id, x.u.id, x.input);
+    x.d.change(x.w.id, x.u.id, { action: "reject", id: p.id, note: "revise" });
+    assert.equal(
+      x.d.change(x.w.id, x.u.id, { ...x.input, action: "revise", id: p.id, note: "fixed" }).state,
+      "draft",
+    );
+    x.s.db.prepare("UPDATE geo_fact_versions SET status='superseded' WHERE id=?").run(x.f.id);
+    assert.throws(() =>
+      x.d.change(x.w.id, x.u.id, { action: "approve", id: p.id, note: "checked" }),
+    );
+  } finally {
+    x.s.db.close();
+  }
+});
+test("publication records manual confirmation and safe URL; no scheduled auto-publish", () => {
+  const x = fixture();
+  try {
+    const p = x.d.create(x.w.id, x.u.id, x.input);
+    x.d.change(x.w.id, x.u.id, { action: "approve", id: p.id, note: "checked" });
+    const req = {
+      action: "publish",
+      id: p.id,
+      note: "manual",
+      confirm: true,
+      publishedAt: new Date(x.t).toISOString(),
+      url: "javascript:alert(1)",
+    };
+    assert.throws(() => x.d.change(x.w.id, x.u.id, req));
+    assert.throws(() =>
+      x.d.change(x.w.id, x.u.id, { ...req, url: "https://example.com/post", confirm: false }),
+    );
+    assert.equal(
+      x.d.change(x.w.id, x.u.id, { ...req, url: "https://example.com/post" }).state,
+      "published",
+    );
+    assert.equal(x.d.history(x.w.id, p.id).events.length, 3);
+  } finally {
+    x.s.db.close();
+  }
+});
+test("same elapsed-day review, missing values preserved, currency and duplicates", () => {
+  const x = fixture();
+  try {
+    const p = published(x),
+      at = new Date(x.t - 7 * day + 1000).toISOString(),
+      input = {
+        id: p.id,
+        observedAt: at,
+        source: "Official dashboard, cumulative",
+        metrics: {
+          views: 100,
+          likes: 4,
+          comments: 2,
+          shares: 1,
+          favorites: 3,
+          visits: 20,
+          registrations: 2,
+          revenueMinor: 1000,
+          refundMinor: 200,
+        },
+        currency: "CNY",
+      };
+    x.d.metric(x.w.id, x.u.id, input);
+    assert.throws(() => x.d.metric(x.w.id, x.u.id, input));
+    assert.throws(() => x.d.metric(x.other.id, x.u.id, input));
+    assert.throws(() =>
+      x.d.metric(x.w.id, x.u.id, { ...input, observedAt: new Date(x.t + day).toISOString() }),
+    );
+    const r = x.d.review(x.w.id, 1)[0];
+    assert.equal(r.engagementRate, 0.1);
+    assert.equal(r.registrationPerVisit, 0.1);
+    assert.equal(r.netRevenueMinor, 800);
+    assert.equal(r.metrics.orders, null);
+    assert.equal(x.d.review(x.w.id, 3)[0].metrics, null);
+    assert.equal(x.d.review(x.other.id, 1).length, 0);
+  } finally {
+    x.s.db.close();
+  }
+});
 
-import {openChannelIntelligence,citationKey,taggedLink} from "../geo/channel-intelligence.mjs";
-test("UTM tracking is stable, workspace scoped and does not overwrite existing query attribution",()=>{const x=fixture();try{const p=x.d.create(x.w.id,x.u.id,x.input),c=openChannelIntelligence(x.s,{clock:()=>x.t});const input={id:p.id,destination:"https://example.com/landing?sku=123",confirm:true};const l=c.createLink(x.w.id,x.u.id,input),u=new URL(l.tracking_url);assert.equal(u.searchParams.get("sku"),"123");assert.equal(u.searchParams.get("utm_source"),"website");assert.equal(u.searchParams.get("utm_content"),p.id);assert.equal(c.createLink(x.w.id,x.u.id,input).tracking_url,l.tracking_url);assert.throws(()=>c.createLink(x.other.id,x.u.id,input));assert.throws(()=>c.createLink(x.w.id,x.u.id,{...input,destination:"https://example.com/different"}));assert.throws(()=>taggedLink("https://example.com/?utm_source=other",{...p,platform:"website"}));assert.equal(canWrite("editor","channel-intelligence","link"),true);assert.equal(canWrite("viewer","channel-intelligence","link"),false)}finally{x.s.db.close()}});
-test("calendar separates actual publication and plan, uses UTC and isolates workspace",()=>{const x=fixture();try{const p=published(x),c=openChannelIntelligence(x.s,{clock:()=>x.t});const actual=p.published_at.slice(0,7),planned=p.scheduled_at.slice(0,7);assert.ok(c.calendar(x.w.id,actual).events.some(e=>e.kind==="published"&&e.id===p.id));assert.ok(c.calendar(x.w.id,planned).events.some(e=>e.kind==="scheduled"&&e.id===p.id));assert.equal(c.calendar(x.other.id,actual).events.length,0);assert.throws(()=>c.calendar(x.w.id,"2026-13"))}finally{x.s.db.close()}});
-test("citation matching preserves functional URL query, separates retrieval, excludes prepublication and cross-workspace data",()=>{const x=fixture();try{const p=published(x),c=openChannelIntelligence(x.s,{clock:()=>x.t});assert.equal(citationKey("https://example.com/post?utm_source=x#section"),"https://example.com/post");assert.notEqual(citationKey("https://example.com/post?id=1"),citationKey(p.public_url));const prompt=x.s.addPrompt(x.w.id,{question:"Another question?"});function seed(w,pr,at,citations,sources){const j=x.s.reserve(w.id,pr.id,"deepseek",100);x.s.finish(j.id,w,{answer:"Answer",model:"citation-test",citations,sources,usage:null,raw:{}});x.s.db.prepare("UPDATE samples SET created_at=? WHERE id=?").run(new Date(at).toISOString(),j.id)}
-seed(x.w,prompt,x.t-1000,[p.public_url+"?utm_source=x",p.public_url],[p.public_url]);seed(x.w,prompt,x.t-2000,[],[p.public_url]);seed(x.w,prompt,x.t-3000,[p.public_url+"?id=1"],[]);seed(x.w,prompt,x.t-9*day,[p.public_url],[]);const b=x.s.addPrompt(x.other.id,{question:"Which product fits?"});seed(x.other,b,x.t-1000,[p.public_url],[]);const r=c.citations(x.w.id,p.id,30),g=r.groups.find(g=>g.model==="citation-test");assert.equal(g.valid,3);assert.equal(g.cited,1);assert.equal(g.retrieved,2);assert.equal(r.evidence.length,2);assert.throws(()=>c.citations(x.other.id,p.id));}finally{x.s.db.close()}});
+import { openChannelIntelligence, citationKey, taggedLink } from "../geo/channel-intelligence.mjs";
+test("UTM tracking is stable, workspace scoped and does not overwrite existing query attribution", () => {
+  const x = fixture();
+  try {
+    const p = x.d.create(x.w.id, x.u.id, x.input),
+      c = openChannelIntelligence(x.s, { clock: () => x.t });
+    const input = { id: p.id, destination: "https://example.com/landing?sku=123", confirm: true };
+    const l = c.createLink(x.w.id, x.u.id, input),
+      u = new URL(l.tracking_url);
+    assert.equal(u.searchParams.get("sku"), "123");
+    assert.equal(u.searchParams.get("utm_source"), "website");
+    assert.equal(u.searchParams.get("utm_content"), p.id);
+    assert.equal(c.createLink(x.w.id, x.u.id, input).tracking_url, l.tracking_url);
+    assert.throws(() => c.createLink(x.other.id, x.u.id, input));
+    assert.throws(() =>
+      c.createLink(x.w.id, x.u.id, { ...input, destination: "https://example.com/different" }),
+    );
+    assert.throws(() =>
+      taggedLink("https://example.com/?utm_source=other", { ...p, platform: "website" }),
+    );
+    assert.equal(canWrite("editor", "channel-intelligence", "link"), true);
+    assert.equal(canWrite("viewer", "channel-intelligence", "link"), false);
+  } finally {
+    x.s.db.close();
+  }
+});
+test("calendar separates actual publication and plan, uses UTC and isolates workspace", () => {
+  const x = fixture();
+  try {
+    const p = published(x),
+      c = openChannelIntelligence(x.s, { clock: () => x.t });
+    const actual = p.published_at.slice(0, 7),
+      planned = p.scheduled_at.slice(0, 7);
+    assert.ok(
+      c.calendar(x.w.id, actual).events.some((e) => e.kind === "published" && e.id === p.id),
+    );
+    assert.ok(
+      c.calendar(x.w.id, planned).events.some((e) => e.kind === "scheduled" && e.id === p.id),
+    );
+    assert.equal(c.calendar(x.other.id, actual).events.length, 0);
+    assert.throws(() => c.calendar(x.w.id, "2026-13"));
+  } finally {
+    x.s.db.close();
+  }
+});
+test("citation matching preserves functional URL query, separates retrieval, excludes prepublication and cross-workspace data", () => {
+  const x = fixture();
+  try {
+    const p = published(x),
+      c = openChannelIntelligence(x.s, { clock: () => x.t });
+    assert.equal(
+      citationKey("https://example.com/post?utm_source=x#section"),
+      "https://example.com/post",
+    );
+    assert.notEqual(citationKey("https://example.com/post?id=1"), citationKey(p.public_url));
+    const prompt = x.s.addPrompt(x.w.id, { question: "Another question?" });
+    function seed(w, pr, at, citations, sources) {
+      const j = x.s.reserve(w.id, pr.id, "deepseek", 100);
+      x.s.finish(j.id, w, {
+        answer: "Answer",
+        model: "citation-test",
+        citations,
+        sources,
+        usage: null,
+        raw: {},
+      });
+      x.s.db
+        .prepare("UPDATE samples SET created_at=? WHERE id=?")
+        .run(new Date(at).toISOString(), j.id);
+    }
+    seed(x.w, prompt, x.t - 1000, [p.public_url + "?utm_source=x", p.public_url], [p.public_url]);
+    seed(x.w, prompt, x.t - 2000, [], [p.public_url]);
+    seed(x.w, prompt, x.t - 3000, [p.public_url + "?id=1"], []);
+    seed(x.w, prompt, x.t - 9 * day, [p.public_url], []);
+    const b = x.s.addPrompt(x.other.id, { question: "Which product fits?" });
+    seed(x.other, b, x.t - 1000, [p.public_url], []);
+    const r = c.citations(x.w.id, p.id, 30),
+      g = r.groups.find((g) => g.model === "citation-test");
+    assert.equal(g.valid, 3);
+    assert.equal(g.cited, 1);
+    assert.equal(g.retrieved, 2);
+    assert.equal(r.evidence.length, 2);
+    assert.throws(() => c.citations(x.other.id, p.id));
+  } finally {
+    x.s.db.close();
+  }
+});
 
-import {openAgent} from "../geo/agent.mjs";
-import {validateCopy,profiles} from "../geo/channel-copy.mjs";
-test("channel Agent uses public facts and shared quota, candidate adoption is atomic and unapproved",async()=>{const x=fixture();try{let calls=0;const ag=openAgent(x.s,x.k,x.a,{distribution:x.d,providers:()=>["deepseek"],limit:1,request:async(p,prompt)=>{calls++;assert.ok(prompt.includes("CSV"));assert.ok(!prompt.includes("Official"));assert.ok(!prompt.includes("approved_outline"));return {model:"mock",answer:JSON.stringify({title:"Export CSV",body:"CSV support",factIds:[x.f.id]})}}});const input={kind:"channel-copy",targetId:x.action.id,channelId:x.c.id,provider:"deepseek",confirm:true};await assert.rejects(ag.run(x.w.id,{...input,confirm:false}));await assert.rejects(ag.run(x.other.id,input));const r=await ag.run(x.w.id,input);assert.equal(r.state,"success");assert.equal(calls,1);assert.equal(x.d.list(x.w.id).publications.length,0);await assert.rejects(ag.run(x.w.id,input));assert.throws(()=>ag.adopt(x.other.id,{id:r.id,scheduledAt:x.input.scheduledAt},x.u.id));assert.throws(()=>ag.adopt(x.w.id,{id:r.id,scheduledAt:"invalid"},x.u.id));assert.equal(ag.recent(x.w.id)[0].adoptions.length,0);const p=ag.adopt(x.w.id,{id:r.id,scheduledAt:x.input.scheduledAt},x.u.id);assert.equal(p.state,"draft");assert.equal(p.body,"CSV support");assert.equal(ag.recent(x.w.id)[0].adoptions[0].target_id,p.id);assert.throws(()=>ag.adopt(x.w.id,{id:r.id,scheduledAt:x.input.scheduledAt},x.u.id));assert.equal(x.d.history(x.w.id,p.id).events[0].note.includes("AI channel copy"),true)}finally{x.s.db.close()}});
-test("channel profiles enforce editorial limits and known fact IDs",()=>{const ctx={platform:"x",channelId:"channel",facts:[{id:"fact"}]};assert.equal(Object.keys(profiles).length,11);assert.equal(validateCopy({title:"Title",body:"a".repeat(240),factIds:["fact"]},ctx).platform,"x");assert.throws(()=>validateCopy({title:"Title",body:"a".repeat(241),factIds:["fact"]},ctx));assert.throws(()=>validateCopy({title:"Title",body:"Text",factIds:["invented"]},ctx))});
-test("source changes, obsolete facts and duplicate channel prevent stale candidate adoption",async()=>{const x=fixture();try{const ag=openAgent(x.s,x.k,x.a,{distribution:x.d,providers:()=>["deepseek"],request:async()=>({model:"mock",answer:JSON.stringify({title:"Export",body:"CSV",factIds:[x.f.id]})})}),input={kind:"channel-copy",targetId:x.action.id,channelId:x.c.id,provider:"deepseek",confirm:true};const r=await ag.run(x.w.id,input);assert.equal(r.state,"success");x.s.db.prepare("UPDATE geo_actions SET draft=draft||' revised' WHERE id=?").run(x.action.id);assert.throws(()=>ag.adopt(x.w.id,{id:r.id,scheduledAt:x.input.scheduledAt},x.u.id),/changed/);assert.equal(x.d.list(x.w.id).publications.length,0);const next=await ag.run(x.w.id,input);x.s.db.prepare("UPDATE geo_fact_versions SET status='superseded' WHERE id=?").run(x.f.id);assert.throws(()=>ag.adopt(x.w.id,{id:next.id,scheduledAt:x.input.scheduledAt},x.u.id));assert.equal(ag.recent(x.w.id).every(r=>r.adoptions.length===0),true)}finally{x.s.db.close()}});
+import { openAgent } from "../geo/agent.mjs";
+import { validateCopy, profiles } from "../geo/channel-copy.mjs";
+test("channel Agent uses public facts and shared quota, candidate adoption is atomic and unapproved", async () => {
+  const x = fixture();
+  try {
+    let calls = 0;
+    const ag = openAgent(x.s, x.k, x.a, {
+      distribution: x.d,
+      providers: () => ["deepseek"],
+      limit: 1,
+      request: async (p, prompt) => {
+        calls++;
+        assert.ok(prompt.includes("CSV"));
+        assert.ok(!prompt.includes("Official"));
+        assert.ok(!prompt.includes("approved_outline"));
+        return {
+          model: "mock",
+          answer: JSON.stringify({ title: "Export CSV", body: "CSV support", factIds: [x.f.id] }),
+        };
+      },
+    });
+    const input = {
+      kind: "channel-copy",
+      targetId: x.action.id,
+      channelId: x.c.id,
+      provider: "deepseek",
+      confirm: true,
+    };
+    await assert.rejects(ag.run(x.w.id, { ...input, confirm: false }));
+    await assert.rejects(ag.run(x.other.id, input));
+    const r = await ag.run(x.w.id, input);
+    assert.equal(r.state, "success");
+    assert.equal(calls, 1);
+    assert.equal(x.d.list(x.w.id).publications.length, 0);
+    await assert.rejects(ag.run(x.w.id, input));
+    assert.throws(() =>
+      ag.adopt(x.other.id, { id: r.id, scheduledAt: x.input.scheduledAt }, x.u.id),
+    );
+    assert.throws(() => ag.adopt(x.w.id, { id: r.id, scheduledAt: "invalid" }, x.u.id));
+    assert.equal(ag.recent(x.w.id)[0].adoptions.length, 0);
+    const p = ag.adopt(x.w.id, { id: r.id, scheduledAt: x.input.scheduledAt }, x.u.id);
+    assert.equal(p.state, "draft");
+    assert.equal(p.body, "CSV support");
+    assert.equal(ag.recent(x.w.id)[0].adoptions[0].target_id, p.id);
+    assert.throws(() => ag.adopt(x.w.id, { id: r.id, scheduledAt: x.input.scheduledAt }, x.u.id));
+    assert.equal(x.d.history(x.w.id, p.id).events[0].note.includes("AI channel copy"), true);
+  } finally {
+    x.s.db.close();
+  }
+});
+test("channel profiles enforce editorial limits and known fact IDs", () => {
+  const ctx = { platform: "x", channelId: "channel", facts: [{ id: "fact" }] };
+  assert.equal(Object.keys(profiles).length, 11);
+  assert.equal(
+    validateCopy({ title: "Title", body: "a".repeat(240), factIds: ["fact"] }, ctx).platform,
+    "x",
+  );
+  assert.throws(() =>
+    validateCopy({ title: "Title", body: "a".repeat(241), factIds: ["fact"] }, ctx),
+  );
+  assert.throws(() => validateCopy({ title: "Title", body: "Text", factIds: ["invented"] }, ctx));
+});
+test("source changes, obsolete facts and duplicate channel prevent stale candidate adoption", async () => {
+  const x = fixture();
+  try {
+    const ag = openAgent(x.s, x.k, x.a, {
+        distribution: x.d,
+        providers: () => ["deepseek"],
+        request: async () => ({
+          model: "mock",
+          answer: JSON.stringify({ title: "Export", body: "CSV", factIds: [x.f.id] }),
+        }),
+      }),
+      input = {
+        kind: "channel-copy",
+        targetId: x.action.id,
+        channelId: x.c.id,
+        provider: "deepseek",
+        confirm: true,
+      };
+    const r = await ag.run(x.w.id, input);
+    assert.equal(r.state, "success");
+    x.s.db.prepare("UPDATE geo_actions SET draft=draft||' revised' WHERE id=?").run(x.action.id);
+    assert.throws(
+      () => ag.adopt(x.w.id, { id: r.id, scheduledAt: x.input.scheduledAt }, x.u.id),
+      /changed/,
+    );
+    assert.equal(x.d.list(x.w.id).publications.length, 0);
+    const next = await ag.run(x.w.id, input);
+    x.s.db.prepare("UPDATE geo_fact_versions SET status='superseded' WHERE id=?").run(x.f.id);
+    assert.throws(() =>
+      ag.adopt(x.w.id, { id: next.id, scheduledAt: x.input.scheduledAt }, x.u.id),
+    );
+    assert.equal(
+      ag.recent(x.w.id).every((r) => r.adoptions.length === 0),
+      true,
+    );
+  } finally {
+    x.s.db.close();
+  }
+});

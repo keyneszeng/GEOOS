@@ -18,8 +18,10 @@ const description = "从 AI 可见度监测、知识底座到内容作战与 ROI
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const host =
+    requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
+  const protocol =
+    requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
 
   return {
@@ -30,7 +32,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1734, height: 907, alt: "GEO/OS 企业 GEO 优化工作台" }],
+      images: [
+        { url: `${origin}/og.png`, width: 1734, height: 907, alt: "GEO/OS 企业 GEO 优化工作台" },
+      ],
     },
     twitter: {
       card: "summary_large_image",
