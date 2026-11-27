@@ -21,6 +21,7 @@ import {openRemediation} from "./site-remediation.mjs";
 import {schemaTool} from "./schema-tools.mjs";
 import {openDocuments} from "./documents.mjs";
 import {openTraffic} from "./traffic-sync.mjs";
+import {openBilling} from "./billing.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
@@ -43,6 +44,7 @@ let planner;
 const workflows=openWorkflows(store,knowledge,actions,agent,auth,{providers:configuredProviders,authorize:r=>planner?.authorized(r)??true});
 planner=openPlanner(store,knowledge,workflows,auth,{providers:configuredProviders,limit:Number(process.env.GEO_AUTO_DAILY_LIMIT||3)});
 const channels=openChannelIntelligence(store);
+const billing=openBilling(store);store.billingCheck=billing.check;
 let busy=false;
 function respond(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(JSON.stringify(data))}
 async function body(req,max=65536){if(!/^application\/json(?:\s*;|$)/i.test(String(req.headers["content-type"])))throw Error("Expected JSON");let n=0;const chunks=[];for await(const chunk of req){n+=chunk.length;if(n>max)throw Error("Request too large");chunks.push(chunk)}const v=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(Buffer.concat(chunks)));if(!v||Array.isArray(v)||typeof v!=="object")throw Error("Expected object");return v}
@@ -72,10 +74,10 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&url.pathname==="/api/users"){if(!user.platform_admin)return respond(res,403,{error:"Platform admin required"});return respond(res,201,auth.provision(user,await body(req)))}
  if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{user,workspaces:auth.list(user.id),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit,auditLimit:siteAudits.limit});
  if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,auth.createWorkspace(user.id,await body(req)));
- const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution|channel-intelligence|site-audits|site-scans|site-tasks|schema|documents|traffic)$/);
+ const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution|channel-intelligence|site-audits|site-scans|site-tasks|schema|documents|traffic|billing)$/);
  if(!match)return respond(res,404,{error:"Not found"});
  const [,id,resource]=match;const role=auth.role(id,user.id);if(!role)return respond(res,404,{error:"Workspace not found"});
- if(["members","audit"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
+ if(["members","audit","billing"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
  // Recheck authorization after asynchronous body parsing. No request body is written to the audit log.
  const data=req.method==="POST"?await body(req,resource==="documents"?3*1024*1024:65536):null;
  if(data&&!(resource==="workflows"?["owner","editor"].includes(auth.role(id,user.id)):canWrite(auth.role(id,user.id),resource,data.action,data.state)))return respond(res,403,{error:"Role does not permit this action"});
@@ -84,6 +86,7 @@ createServer(async(req,res)=>{
  if(req.method==="GET"&&resource==="members")return respond(res,200,auth.members(id));
  if(req.method==="GET"&&resource==="audit")return respond(res,200,auth.logs(id));
  if(req.method==="GET"){
+  if(resource==="billing")return respond(res,200,billing.read(id));
   if(resource==="documents")return respond(res,200,documents.list(id));
   if(resource==="traffic")return respond(res,200,traffic.list(id));
   if(resource==="site-scans")return respond(res,200,scans.recent(id));
@@ -108,6 +111,7 @@ createServer(async(req,res)=>{
   if(resource==="analysis")return respond(res,200,analyze(store.db.prepare("SELECT id,prompt_id,question,provider,model,status,mentioned,competitor_hits,citations FROM samples WHERE workspace_id=? AND created_at>=? ORDER BY created_at DESC").all(id,new Date(Date.now()-30*86400000).toISOString())));
   return respond(res,200,resource==="prompts"?store.prompts(id):resource==="samples"?store.history(id):store.stats(id));
  }
+ if(req.method==="POST"&&resource==="billing")return write(200,billing.change(user,id,data));
  if(req.method==="POST"&&resource==="documents"){if(data.action!=="import")throw Error("Unsupported document action");return write(201,await documents.run(id,user.id,data))}
  if(req.method==="POST"&&resource==="traffic")return write(200,traffic.plan(id,user.id,data));
  if(req.method==="POST"&&resource==="site-scans"){if(data.action!=="run")throw Error("Unsupported scan action");return write(201,await scans.run(id,user.id,data))}

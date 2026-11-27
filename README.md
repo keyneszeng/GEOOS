@@ -188,3 +188,7 @@ npm run geo:test
 ### 文档解析及真实渠道数据适配
 
 Docker 内置 Python 3 与 poppler-utils。PDF 前 20 页文本（无 OCR）、DOCX 主文档、XLSX 前 10 个工作表 XML 的缓存值（不执行公式），2 MiB 原文件/16 MiB ZIP 解压总量/12k 字符上限；不保存原始文件，不自动发布为公开证据。裸机需安装 Python 3 和 pdftotext。使用 `GEO_YOUTUBE_API_KEY` 读取 YouTube 公共统计；`GEO_INSTAGRAM_CONFIG` JSON 以工作区 ID 为键配置 `{token,version}`，需真实 Instagram 授权，媒体 ID 必须与发布链接匹配。仅同步已登记已发布内容，每 24 小时最多一次，授权 7/30 天，失败不立即重试，全局每日 20 次；未知指标不填零。未配置凭证时关闭。其他平台及完整 OAuth 生命周期待接入。
+
+### 本地 MCP、商业化账单及浏览器验收
+
+`npm run geo:mcp` 提供 2025-11-25 MCP stdio 只读工具，使用独立低权限本地账号 GEO_MCP_USER/GEO_MCP_PASSWORD，经 HTTP 鉴权。参见 skills/geoos/SKILL.md。商业方案由同时具有平台管理员和工作区 owner 权限者设置月费、币种及采样/Agent 月额度；未分配方案的工作区保持全局限制。月额度按 UTC 请求次数（含失败）限制实际执行；本月账单唯一，金额快照保留，人工核验外部付款编号后登记结算。无支付网关、自动扣款、税务发票、续费或在线开户。CI 新增真实 Chromium 浏览器冒烟测试，覆盖登录、工作区、七模块导航、问题录入、结构化数据、账单及注销；不等同于全系统交互验收。恢复备份停止流量同步授权。

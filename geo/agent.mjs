@@ -65,6 +65,7 @@ export function openAgent(store,knowledge,actions,{request=sample,providers=conf
   if(input.confirm!==true)throw Error("Explicit confirmation of API cost and data transfer required");
   if(!kinds.includes(input.kind)||!providers().includes(input.provider))throw Error("Agent provider or kind unavailable");
   if(running)throw Error("Agent busy");
+  store.billingCheck?.(w,"agent");
   const ctx=context(w,input),payload=JSON.stringify(ctx);if(payload.length>32000)throw Error("Agent input exceeds limit");
   const id=randomUUID(),t=now();
   const result=db.prepare("INSERT INTO geo_agent_runs(id,workspace_id,kind,target_id,provider,state,context,created_at) SELECT ?,?,?,?,?,'running',?,? WHERE (SELECT COUNT(*) FROM geo_agent_runs WHERE created_at>=?)<?").run(id,w,input.kind,input.targetId,input.provider,payload,t,t.slice(0,10),limit);
