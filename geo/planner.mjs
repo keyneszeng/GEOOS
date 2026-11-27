@@ -44,7 +44,7 @@ export function openPlanner(store,knowledge,workflows,auth,{providers=()=>[],clo
  }
  function tick(){
   const t=clock(),d=iso(t).slice(0,10);
-  for(const p of db.prepare("SELECT * FROM geo_plans WHERE enabled=1 ORDER BY created_at,id").all()){
+  for(const p of db.prepare("SELECT * FROM geo_plans WHERE enabled=1 ORDER BY created_at,rowid").all()){
    if(p.expires_at<=iso(t)||!owner(p.workspace_id,p.actor_id)){db.prepare("UPDATE geo_plans SET enabled=0 WHERE id=?").run(p.id);continue}
    if(db.prepare("SELECT id FROM geo_daily_reports WHERE workspace_id=? AND day=?").get(p.workspace_id,d))continue;
    const w=p.workspace_id,id=randomUUID(),report=build(w,t);
