@@ -1,4 +1,5 @@
 FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends python3 poppler-utils && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --chown=node:node geo/ ./geo/
 RUN mkdir /data && chown node:node /data && chmod 700 /data

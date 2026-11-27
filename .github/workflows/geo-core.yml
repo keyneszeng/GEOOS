@@ -4,12 +4,13 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y python3 poppler-utils
       - run: npm run geo:test
       - run: node --check geo/server.mjs
       - run: node --check geo/queue.mjs
@@ -28,6 +29,14 @@ jobs:
       - run: node --check geo/channel-intelligence.mjs
       - run: node --check geo/channel-copy.mjs
       - run: node --check geo/site-audit.mjs
+      - run: node --check geo/site-scan.mjs && node --check geo/site-remediation.mjs && node --check geo/schema-tools.mjs
+      - run: node --check geo/documents.mjs && node --check geo/traffic-sync.mjs
+      - run: node --check geo/billing.mjs && node --check geo/mcp.mjs
+      - name: Real Chromium browser smoke
+        run: |
+          npm install --prefix /tmp/geo-browser --no-save playwright@1.56.1
+          node /tmp/geo-browser/node_modules/playwright/cli.js install --with-deps chromium
+          GEO_PLAYWRIGHT_MODULE=/tmp/geo-browser/node_modules/playwright npm run geo:browser
       - name: Build and smoke-test local container
         run: |
           docker build -f Dockerfile.geo -t geo-test .
