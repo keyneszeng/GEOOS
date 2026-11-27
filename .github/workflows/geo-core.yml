@@ -18,3 +18,5 @@ jobs:
       - run: node --check geo/actions.mjs
       - run: node --check geo/agent.mjs
       - run: node --input-type=module -e "import {readFileSync} from 'node:fs'; import {Script} from 'node:vm'; new Script(readFileSync('geo/index.html','utf8').split('<script>')[1].split('</script>')[0]);"
+      - run: node --check geo/import.mjs
+      - run: node --check geo/reviews.mjs
