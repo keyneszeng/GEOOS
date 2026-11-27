@@ -4,7 +4,9 @@ GEO/OS 是一个面向企业市场、品牌、公关、内容、产品和数据�
 
 在线演示：[geo-os-workbench.swift-lake-5238.chatgpt.site](https://geo-os-workbench.swift-lake-5238.chatgpt.site)
 
-> 当前版本为可交互的产品原型，界面数据均为安全的示例数据，尚未连接真实企业数据或第三方 API。
+> **真实工作台**：`npm run geo:live` 启动本地 SQLite 服务，访问 http://127.0.0.1:3100 ，默认进入 ESO 银河摄影首页，顶部模块直接进入登录后的真实业务工作台。原在线演示及 `npm run dev` 是独立示例前端，不代表真实工作台的数据或最新界面。真实供应商调用需配置授权 API，未配置时不生成虚假数据。
+>
+> 详见 [业务工作流](docs/business-workflow.md)、[仓库结构与启动方式](docs/repository-guide.md) 及 [银河摄影资源授权](geo/assets/README.md)。
 
 ## 核心能力
 
