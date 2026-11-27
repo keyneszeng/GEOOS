@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm run format
+      - run: npm run format
       - run: npm run format:check
       - name: Commit only formatter changes to review branch
         run: |
