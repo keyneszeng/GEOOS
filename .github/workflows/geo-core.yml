@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm run format:check
       - run: sudo apt-get update && sudo apt-get install -y python3 poppler-utils
       - run: npm run geo:test
       - run: node --check geo/server.mjs

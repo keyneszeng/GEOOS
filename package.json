@@ -15,7 +15,9 @@
     "geo:live": "node geo/server.mjs",
     "geo:mcp": "node geo/mcp.mjs",
     "geo:browser": "node tests/geo-browser.mjs",
-    "geo:test": "node --test tests/geo-core.test.mjs tests/geo-queue.test.mjs tests/geo-knowledge.test.mjs tests/geo-agent.test.mjs tests/geo-report.test.mjs tests/geo-auth.test.mjs tests/geo-http.test.mjs tests/geo-ops.test.mjs tests/geo-workflows.test.mjs tests/geo-planner.test.mjs tests/geo-distribution.test.mjs tests/geo-site-audit.test.mjs tests/geo-expansion.test.mjs"
+    "geo:test": "node --test tests/geo-core.test.mjs tests/geo-queue.test.mjs tests/geo-knowledge.test.mjs tests/geo-agent.test.mjs tests/geo-report.test.mjs tests/geo-auth.test.mjs tests/geo-http.test.mjs tests/geo-ops.test.mjs tests/geo-workflows.test.mjs tests/geo-planner.test.mjs tests/geo-distribution.test.mjs tests/geo-site-audit.test.mjs tests/geo-expansion.test.mjs",
+    "format": "npx --yes prettier@3.6.2 --write \"geo/**/*.{mjs,html}\" \"tests/**/*.mjs\" \"app/**/*.{ts,tsx,css}\" \"{build,db,examples,worker}/**/*.{ts,tsx,mjs}\" \"*.{ts,mjs}\" package.json tsconfig.json .prettierrc.json",
+    "format:check": "npx --yes prettier@3.6.2 --check \"geo/**/*.{mjs,html}\" \"tests/**/*.mjs\" \"app/**/*.{ts,tsx,css}\" \"{build,db,examples,worker}/**/*.{ts,tsx,mjs}\" \"*.{ts,mjs}\" package.json tsconfig.json .prettierrc.json"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
@@ -41,5 +43,6 @@
     "vite": "8.0.13",
     "wrangler": "4.92.0"
   },
-  "type": "module"
+  "type": "module",
+  "license": "MIT"
 }
