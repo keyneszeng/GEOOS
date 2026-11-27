@@ -1,6 +1,7 @@
 import {randomUUID} from "node:crypto";
 const stamp=t=>new Date(t).toISOString();
-const engines=new Set(["deepseek","perplexity"]);
+import {providerIds} from "./providers.mjs";
+const engines=new Set(providerIds);
 export function openQueue(store,{clock=Date.now}={}){
  const {db}=store;
  db.exec("CREATE TABLE IF NOT EXISTS geo_schedules(id TEXT PRIMARY KEY,workspace_id TEXT NOT NULL REFERENCES workspaces(id),prompt_id TEXT NOT NULL REFERENCES prompts(id),provider TEXT NOT NULL,interval_minutes INTEGER NOT NULL,enabled INTEGER NOT NULL,next_at TEXT NOT NULL,created_at TEXT NOT NULL);");

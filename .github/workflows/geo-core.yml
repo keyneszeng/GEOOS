@@ -21,3 +21,11 @@ jobs:
       - run: node --check geo/import.mjs
       - run: node --check geo/reviews.mjs
       - run: node --check geo/auth.mjs
+      - run: node --check geo/backup.mjs
+      - name: Build and smoke-test local container
+        run: |
+          docker build -f Dockerfile.geo -t geo-test .
+          docker run -d --name geo-test -p 127.0.0.1:3100:3100 -e GEO_ADMIN_USER=ciadmin -e GEO_ADMIN_PASSWORD=ci-only-password-12345 geo-test
+          trap 'docker logs geo-test; docker rm -f geo-test' EXIT
+          for n in $(seq 1 30); do curl -fsS http://127.0.0.1:3100/healthz && exit 0; sleep 1; done
+          exit 1

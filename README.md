@@ -145,3 +145,10 @@ npm run geo:test
 - scrypt 密码哈希、随机会话令牌的 SHA-256 存储、8 小时过期、HttpOnly/SameSite Cookie、同源写校验与全局登录频率限制。仅 HTTP loopback；没有密码找回、强制换密、MFA、TLS 或跨实例会话保护。不要直接暴露到公网。后台已授权的定时计划与已排队任务不会因成员移除自动停止，owner 需停用计划。
 - 七个真实业务导航与企业设置，指挥舱使用实际样本数/任务数；ROI 页面展示描述性前后对比，尚无真实收入/CRM 归因。原 Next.js 云端演示仍独立。权限由服务端强制执行，部分前端写按钮会显示但提交被拒绝。
 - 操作日志保存成功调用的操作者、资源、动作及目标 ID（不保存密码/正文），业务数据与通用日志暂非原子事务；Agent/导入失败也可能记录为已发起操作。HTTP 自动化测试验证登录、同源校验、权限和注销。该版本不是生产级 SaaS。
+
+### 阶段 1.3 / 5.2：更多引擎与本地容器、备份
+
+- 新增 OpenAI Responses API：`OPENAI_API_KEY` + `GEO_OPENAI_MODEL` 为普通模型采样；另设 `GEO_OPENAI_WEB_MODEL` 开启独立 `openai-web` profile，要求完成 web search，分别保存引用与检索来源。两种口径不合并。Gemini GenerateContent：`GEMINI_API_KEY` + `GEO_GEMINI_MODEL`，当前普通文本模式，不启用 Google Search。模型 ID 由管理员按账户实际能力配置，无默认模型、无自动调用。API 采样不代表 ChatGPT/Gemini 消费端；未验证真实付费响应。参考 https://developers.openai.com/api/docs/guides/tools-web-search 与 https://ai.google.dev/api/generate-content 。
+- 安全本地 Docker：创建不提交的 `.env.geo`，设置首次管理员、所需供应商密钥与模型；运行 `docker compose -f compose.geo.yml up -d --build`，访问 `http://127.0.0.1:3100`。仅发布宿主机 loopback，容器内部非 root、只读根文件系统、持久卷 `/data`。`GEO_CONTAINER_BIND=1` 仅供该容器模式，不能直接公网部署。初始化后从 env 文件删除管理员初始密码；容器运行时环境仍可能被 Docker 管理员查看。
+- 本地数据库备份：`node geo/backup.mjs backup .geo-data/geo.sqlite /secure/path/backup.sqlite`，使用 SQLite VACUUM INTO 生成一致快照（包含 WAL 已提交数据）；备份包含企业敏感信息、密码哈希、会话哈希，需独立加密保管。恢复：`node geo/backup.mjs restore /secure/path/backup.sqlite /secure/path/restored.sqlite`。禁止覆盖已有数据库/sidecar；恢复到新库后撤销会话、停用自动采样计划、取消待采样任务，运行中任务由启动恢复逻辑标记中断。确认后手工停止旧实例并用 GEO_DB 指向新库，不要同时启动两个实例。无远程备份、自动保留、加密或灾备演练服务。
+- 健康检查 `/healthz` 不返回业务数据。CI 新增适配器、备份恢复及 Docker 构建/启动检查，不等同于生产上线。

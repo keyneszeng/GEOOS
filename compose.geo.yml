@@ -1,0 +1,25 @@
+services:
+  geo:
+    build:
+      context: .
+      dockerfile: Dockerfile.geo
+    ports:
+      - "127.0.0.1:3100:3100"
+    env_file:
+      - .env.geo
+    environment:
+      GEO_CONTAINER_BIND: "1"
+      GEO_DB: /data/geo.sqlite
+      GEO_PORT: "3100"
+    volumes:
+      - geo-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+volumes:
+  geo-data:

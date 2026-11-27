@@ -14,6 +14,7 @@ import {openAuth,canWrite} from "./auth.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
+const bind=process.env.GEO_CONTAINER_BIND==="1"?"0.0.0.0":"127.0.0.1";
 const store=openStore(path),html=readFileSync(new URL("./index.html",import.meta.url)),host="127.0.0.1:"+port,origin="http://"+host;
 const auth=openAuth(store,{bootstrapUser:process.env.GEO_ADMIN_USER,bootstrapPassword:process.env.GEO_ADMIN_PASSWORD});
 delete process.env.GEO_ADMIN_PASSWORD;
@@ -38,6 +39,7 @@ createServer(async(req,res)=>{
  if(req.headers.host!==host||req.headers.origin&&req.headers.origin!==origin)return respond(res,403,{error:"Local origin required"});
  try{
  const url=new URL(req.url,origin);
+ if(req.method==="GET"&&url.pathname==="/healthz"){store.db.prepare("SELECT 1").get();return respond(res,200,{ok:true})}
  if(req.method==="GET"&&url.pathname==="/"){res.writeHead(200,{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'","X-Content-Type-Options":"nosniff"});return res.end(html)}
  if(req.method==="POST"&&req.headers.origin!==origin)return respond(res,403,{error:"Same-origin write required"});
  if(req.method==="POST"&&url.pathname==="/api/login"){const token=auth.login(await body(req));if(!token)return respond(res,401,{error:"Invalid credentials"});res.setHeader("Set-Cookie","geo_session="+token+"; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800");return respond(res,200,{ok:true})}
@@ -89,4 +91,4 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&resource==="schedules"){const d=data;if(d.action==="stop")return write(200,queue.stop(id,d.id));if(!configuredProviders().includes(d.provider))throw Error("Provider not configured");return write(201,queue.schedule(id,d))}
  return respond(res,405,{error:"Method not allowed"});
  }catch(e){const msg=e instanceof SyntaxError?"Invalid JSON":String(e.message);return respond(res,400,{error:/SQLITE|database|constraint/i.test(msg)?"Database operation failed":msg.slice(0,200)})}
-}).listen(port,"127.0.0.1",()=>console.log("GEO/OS live monitor: "+origin));
+}).listen(port,bind,()=>console.log("GEO/OS live monitor: "+origin));
