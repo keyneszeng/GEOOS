@@ -184,3 +184,7 @@ npm run geo:test
 ### 阶段 2.5：站点诊断、整改与结构化数据
 
 授权同源有限扫描每次最多 10 页、3 个 sitemap、全局每日 3 次；robots.txt 无法读取时停止，匹配禁抓规则保守跳过，不实现完整 RFC 规则或爬虫模拟。只读取白名单公开 HTTPS，静态解析，非无限全站覆盖。整改任务关联原报告及问题；登记整改后需更新的同 URL 单页诊断显示对应信号改善才能复核。结构化数据支持 Organization/WebSite/Article 三种模板，校验字段与 HTTPS URL，不代表完整 Schema.org 语义或富结果资格，不自动写入网站。
+
+### 文档解析及真实渠道数据适配
+
+Docker 内置 Python 3 与 poppler-utils。PDF 前 20 页文本（无 OCR）、DOCX 主文档、XLSX 前 10 个工作表 XML 的缓存值（不执行公式），2 MiB 原文件/16 MiB ZIP 解压总量/12k 字符上限；不保存原始文件，不自动发布为公开证据。裸机需安装 Python 3 和 pdftotext。使用 `GEO_YOUTUBE_API_KEY` 读取 YouTube 公共统计；`GEO_INSTAGRAM_CONFIG` JSON 以工作区 ID 为键配置 `{token,version}`，需真实 Instagram 授权，媒体 ID 必须与发布链接匹配。仅同步已登记已发布内容，每 24 小时最多一次，授权 7/30 天，失败不立即重试，全局每日 20 次；未知指标不填零。未配置凭证时关闭。其他平台及完整 OAuth 生命周期待接入。

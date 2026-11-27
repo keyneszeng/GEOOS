@@ -8,6 +8,7 @@ function digest(password,salt){return scryptSync(password,salt,64,{N:16384,r:8,p
 export function canWrite(role,resource,action,state){
  if(role==="owner")return true;
  if(resource==="members"||resource==="audit")return false;
+ if(resource==="documents"||resource==="traffic")return role==="editor";
  if(resource==="site-scans"||resource==="schema")return role==="editor";
  if(resource==="site-tasks")return role==="editor"&&["create","implement"].includes(action)||role==="reviewer"&&action==="verify";
  if(resource==="site-audits")return role==="editor"&&action==="run";

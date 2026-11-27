@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y python3 poppler-utils
       - run: npm run geo:test
       - run: node --check geo/server.mjs
       - run: node --check geo/queue.mjs
@@ -29,6 +30,7 @@ jobs:
       - run: node --check geo/channel-copy.mjs
       - run: node --check geo/site-audit.mjs
       - run: node --check geo/site-scan.mjs && node --check geo/site-remediation.mjs && node --check geo/schema-tools.mjs
+      - run: node --check geo/documents.mjs && node --check geo/traffic-sync.mjs
       - name: Build and smoke-test local container
         run: |
           docker build -f Dockerfile.geo -t geo-test .
