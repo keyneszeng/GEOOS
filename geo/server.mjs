@@ -14,6 +14,7 @@ import {openAuth,canWrite} from "./auth.mjs";
 import {openWorkflows} from "./workflows.mjs";
 import {openPlanner} from "./planner.mjs";
 import {openDistribution} from "./distribution.mjs";
+import {openChannelIntelligence} from "./channel-intelligence.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
@@ -30,6 +31,7 @@ let planner;
 const workflows=openWorkflows(store,knowledge,actions,agent,auth,{providers:configuredProviders,authorize:r=>planner?.authorized(r)??true});
 planner=openPlanner(store,knowledge,workflows,auth,{providers:configuredProviders,limit:Number(process.env.GEO_AUTO_DAILY_LIMIT||3)});
 const distribution=openDistribution(store,knowledge);
+const channels=openChannelIntelligence(store);
 let busy=false;
 function respond(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(JSON.stringify(data))}
 async function body(req){if(!String(req.headers["content-type"]).startsWith("application/json"))throw Error("Expected JSON");let data="";for await(const chunk of req){data+=chunk;if(Buffer.byteLength(data)>16384)throw Error("Request too large")}const v=JSON.parse(data);if(!v||Array.isArray(v)||typeof v!=="object")throw Error("Expected object");return v}
@@ -58,7 +60,7 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&url.pathname==="/api/users"){if(!user.platform_admin)return respond(res,403,{error:"Platform admin required"});return respond(res,201,auth.provision(user,await body(req)))}
  if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{user,workspaces:auth.list(user.id),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit});
  if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,auth.createWorkspace(user.id,await body(req)));
- const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution)$/);
+ const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows|planner|distribution|channel-intelligence)$/);
  if(!match)return respond(res,404,{error:"Not found"});
  const [,id,resource]=match;const role=auth.role(id,user.id);if(!role)return respond(res,404,{error:"Workspace not found"});
  if(["members","audit"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
@@ -70,6 +72,7 @@ createServer(async(req,res)=>{
  if(req.method==="GET"&&resource==="members")return respond(res,200,auth.members(id));
  if(req.method==="GET"&&resource==="audit")return respond(res,200,auth.logs(id));
  if(req.method==="GET"){
+  if(resource==="channel-intelligence")return respond(res,200,url.searchParams.has("month")?channels.calendar(id,url.searchParams.get("month")):url.searchParams.has("id")?channels.citations(id,url.searchParams.get("id"),Number(url.searchParams.get("days")||30)):channels.links(id));
   if(resource==="distribution")return respond(res,200,url.searchParams.has("id")?distribution.history(id,url.searchParams.get("id")):url.searchParams.has("age")?distribution.review(id,Number(url.searchParams.get("age"))):distribution.list(id));
   if(resource==="planner")return respond(res,200,planner.list(id));
   if(resource==="workflows")return respond(res,200,url.searchParams.has("id")?workflows.events(id,url.searchParams.get("id")):workflows.recent(id));
@@ -87,6 +90,7 @@ createServer(async(req,res)=>{
   if(resource==="analysis")return respond(res,200,analyze(store.db.prepare("SELECT id,prompt_id,question,provider,model,status,mentioned,competitor_hits,citations FROM samples WHERE workspace_id=? AND created_at>=? ORDER BY created_at DESC").all(id,new Date(Date.now()-30*86400000).toISOString())));
   return respond(res,200,resource==="prompts"?store.prompts(id):resource==="samples"?store.history(id):store.stats(id));
  }
+ if(req.method==="POST"&&resource==="channel-intelligence"){if(data.action!=="link")throw Error("Unsupported channel operation");return write(201,channels.createLink(id,user.id,data))}
  if(req.method==="POST"&&resource==="distribution"){const d=data;if(d.action==="channel")return write(201,distribution.channel(id,d));if(d.action==="create")return write(201,distribution.create(id,user.id,d));if(d.action==="metric")return write(201,distribution.metric(id,user.id,d));return write(200,distribution.change(id,user.id,d))}
  if(req.method==="POST"&&resource==="planner"){if(data.action==="create")return write(201,planner.create(id,user.id,data));if(data.action==="stop")return write(200,planner.stop(id,user.id,data.id));throw Error("Unsupported planner action")}
  if(req.method==="POST"&&resource==="workflows")return write(200,data.action==="create"?workflows.create(id,user.id,data):workflows.control(id,user.id,data));
