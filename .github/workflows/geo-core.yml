@@ -22,6 +22,7 @@ jobs:
       - run: node --check geo/reviews.mjs
       - run: node --check geo/auth.mjs
       - run: node --check geo/backup.mjs
+      - run: node --check geo/workflows.mjs
       - name: Build and smoke-test local container
         run: |
           docker build -f Dockerfile.geo -t geo-test .

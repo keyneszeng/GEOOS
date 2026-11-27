@@ -11,6 +11,7 @@ import {openAgent} from "./agent.mjs";
 import {openImporter} from "./import.mjs";
 import {openReviews} from "./reviews.mjs";
 import {openAuth,canWrite} from "./auth.mjs";
+import {openWorkflows} from "./workflows.mjs";
 const port=Number(process.env.GEO_PORT||3100),path=resolve(process.env.GEO_DB||".geo-data/geo.sqlite"),limit=Number(process.env.GEO_DAILY_LIMIT||30);
 if(!Number.isInteger(port)||port<1024||port>65535||!Number.isInteger(limit)||limit<1||limit>10000)throw Error("Invalid port or limit");
 process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});
@@ -23,6 +24,7 @@ const knowledge=openKnowledge(store),actions=openActions(store,knowledge);
 const agent=openAgent(store,knowledge,actions,{limit:Number(process.env.GEO_AGENT_DAILY_LIMIT||5)});
 const importer=openImporter(store,knowledge,{hosts:(process.env.GEO_IMPORT_HOSTS||"").split(",").map(x=>x.trim().toLowerCase()).filter(Boolean),limit:Number(process.env.GEO_IMPORT_DAILY_LIMIT||10)});
 const reviews=openReviews(store,knowledge);
+const workflows=openWorkflows(store,knowledge,actions,agent,auth,{providers:configuredProviders});
 let busy=false;
 function respond(res,status,data){res.writeHead(status,{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});res.end(JSON.stringify(data))}
 async function body(req){if(!String(req.headers["content-type"]).startsWith("application/json"))throw Error("Expected JSON");let data="";for await(const chunk of req){data+=chunk;if(Buffer.byteLength(data)>16384)throw Error("Request too large")}const v=JSON.parse(data);if(!v||Array.isArray(v)||typeof v!=="object")throw Error("Expected object");return v}
@@ -35,6 +37,7 @@ async function work(){
 }
 const wake=()=>void work();
 setInterval(wake,5000);
+setInterval(()=>void workflows.tick().catch(e=>console.error("Workflow error:",e.message)),5000);
 createServer(async(req,res)=>{
  if(req.headers.host!==host||req.headers.origin&&req.headers.origin!==origin)return respond(res,403,{error:"Local origin required"});
  try{
@@ -49,18 +52,19 @@ createServer(async(req,res)=>{
  if(req.method==="POST"&&url.pathname==="/api/users"){if(!user.platform_admin)return respond(res,403,{error:"Platform admin required"});return respond(res,201,auth.provision(user,await body(req)))}
  if(req.method==="GET"&&url.pathname==="/api/workspaces")return respond(res,200,{user,workspaces:auth.list(user.id),providers:configuredProviders(),dailyLimit:limit,agentLimit:agent.limit,importHosts:importer.hosts,importLimit:importer.limit});
  if(req.method==="POST"&&url.pathname==="/api/workspaces")return respond(res,201,auth.createWorkspace(user.id,await body(req)));
- const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit)$/);
+ const match=url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]+)\/(prompts|samples|metrics|jobs|schedules|analysis|evidence|facts|public-facts|actions|agent|imports|reviews|review-metrics|comparison|members|audit|workflows)$/);
  if(!match)return respond(res,404,{error:"Not found"});
  const [,id,resource]=match;const role=auth.role(id,user.id);if(!role)return respond(res,404,{error:"Workspace not found"});
  if(["members","audit"].includes(resource)&&role!=="owner")return respond(res,403,{error:"Workspace owner required"});
  // Recheck authorization after asynchronous body parsing. No request body is written to the audit log.
  const data=req.method==="POST"?await body(req):null;
- if(data&&!canWrite(auth.role(id,user.id),resource,data.action,data.state))return respond(res,403,{error:"Role does not permit this action"});
+ if(data&&!(resource==="workflows"?["owner","editor"].includes(auth.role(id,user.id)):canWrite(auth.role(id,user.id),resource,data.action,data.state)))return respond(res,403,{error:"Role does not permit this action"});
  const write=(status,result)=>{auth.audit(id,user.id,resource,data?.action||"create",result?.id||data?.id||data?.targetId||data?.runId);return respond(res,status,result)};
  if(req.method==="POST"&&resource==="members")return respond(res,200,data.action==="remove"?auth.removeMember(id,user.id,data):auth.setMember(id,user.id,data));
  if(req.method==="GET"&&resource==="members")return respond(res,200,auth.members(id));
  if(req.method==="GET"&&resource==="audit")return respond(res,200,auth.logs(id));
  if(req.method==="GET"){
+  if(resource==="workflows")return respond(res,200,url.searchParams.has("id")?workflows.events(id,url.searchParams.get("id")):workflows.recent(id));
   if(resource==="imports")return respond(res,200,importer.recent(id));
   if(resource==="reviews")return respond(res,200,reviews.recent(id));
   if(resource==="review-metrics")return respond(res,200,reviews.stats(id));
@@ -75,6 +79,7 @@ createServer(async(req,res)=>{
   if(resource==="analysis")return respond(res,200,analyze(store.db.prepare("SELECT id,prompt_id,question,provider,model,status,mentioned,competitor_hits,citations FROM samples WHERE workspace_id=? AND created_at>=? ORDER BY created_at DESC").all(id,new Date(Date.now()-30*86400000).toISOString())));
   return respond(res,200,resource==="prompts"?store.prompts(id):resource==="samples"?store.history(id):store.stats(id));
  }
+ if(req.method==="POST"&&resource==="workflows")return write(200,data.action==="create"?workflows.create(id,user.id,data):workflows.control(id,user.id,data));
  if(req.method==="POST"&&resource==="imports")return write(200,await importer.run(id,data));
  if(req.method==="POST"&&resource==="reviews")return write(200,reviews.review(id,data));
  if(req.method==="POST"&&resource==="agent"){const d=data;if(d.action==="run")return write(200,await agent.run(id,d));if(d.action==="adopt")return write(200,agent.adopt(id,d));throw Error("Unsupported agent action")}
