@@ -37,7 +37,7 @@ export function openQueue(store,{clock=Date.now}={}){
   }});
  }
  function claim(configured,limit){
-  return tx(()=>{const jobs=db.prepare("SELECT * FROM geo_jobs WHERE state='queued' AND available_at<=? ORDER BY created_at,id LIMIT 200").all(stamp(clock()));const j=jobs.find(j=>{if(!configured.includes(j.provider))return false;try{store.billingCheck?.(j.workspace_id,"samples");return true}catch(e){if(e.code!=="GEO_MONTHLY_QUOTA")throw e;db.prepare("UPDATE geo_jobs SET state='failed',finished_at=?,error=? WHERE id=? AND state='queued'").run(stamp(clock()),e.message,j.id);return false}});if(!j)return null;
+  return tx(()=>{const jobs=db.prepare("SELECT * FROM geo_jobs WHERE state='queued' AND available_at<=? ORDER BY created_at,rowid LIMIT 200").all(stamp(clock()));const j=jobs.find(j=>{if(!configured.includes(j.provider))return false;try{store.billingCheck?.(j.workspace_id,"samples");return true}catch(e){if(e.code!=="GEO_MONTHLY_QUOTA")throw e;db.prepare("UPDATE geo_jobs SET state='failed',finished_at=?,error=? WHERE id=? AND state='queued'").run(stamp(clock()),e.message,j.id);return false}});if(!j)return null;
    if(db.prepare("SELECT count(*) AS n FROM samples WHERE created_at>=?").get(new Date().toISOString().slice(0,10)).n>=limit)return null;
    const sample=store.reserve(j.workspace_id,j.prompt_id,j.provider,limit);
    db.prepare("UPDATE geo_jobs SET state='running',started_at=?,sample_id=? WHERE id=?").run(stamp(clock()),sample.id,j.id);
